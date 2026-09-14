@@ -31,7 +31,6 @@
     "db:inventario": "tsx prisma/set-inventario.ts",
     "db:codigos": "tsx prisma/set-codigos.ts",
     "db:encuestas": "tsx prisma/set-encuestas.ts",
-    "db:normalizar-listas": "tsx prisma/normalizar-listas.ts",
     "db:cirugias": "tsx prisma/set-cirugias.ts",
     "db:nomina": "tsx prisma/set-nomina.ts",
     "db:pendientes": "node --max-old-space-size=8192 node_modules/tsx/dist/cli.mjs prisma/set-pendientes.ts",

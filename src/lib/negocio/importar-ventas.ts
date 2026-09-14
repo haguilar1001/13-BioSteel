@@ -8,6 +8,7 @@
 // ==========================================================
 import * as XLSX from "xlsx";
 import { ipsDe, notaCredito, type VentaRow, type ParamNC, type CtxNC } from "./nota-credito";
+import { nombreLista } from "./listas-precio";
 
 /** Renglón normalizado: lo del motor + campos para agregar (costo/cliente/nit). */
 export interface FilaVenta extends VentaRow {
@@ -290,12 +291,22 @@ export function agregarVentas(
     // origen sin volver a recorrer VentaDoc. Cada una va en la llave por la
     // misma razón: el mismo ítem despachado dos veces con un dato distinto
     // (tarifa, bodega) son dos historias que no hay que sumar en una sola.
+    //
+    // La lista se normaliza a su NOMBRE aquí, al agregar — no como parche
+    // aparte sobre lo ya guardado (así se arregló la vez pasada, con
+    // normalizar-listas.ts, y se deshizo solo en el siguiente recálculo:
+    // ese script tocaba VentaItemIps directo, pero esta función lo
+    // reconstruye entero cada vez). El reporte de SIESA a veces trae el
+    // código (4, 14…) y a veces el nombre ya resuelto (SOAT…) según el mes;
+    // sin normalizar, la misma lista aparecía DOS veces en el filtro —una
+    // por código y otra por nombre— con la utilidad partida entre las dos.
+    const listaCanon = nombreLista(r.lista);
     const instalacion = resolverInstalacion(r.bod, mapaInstalacion);
-    const kII = `${kI}|${r.cliente}|${r.lista}|${instalacion}`;
+    const kII = `${kI}|${r.cliente}|${listaCanon}|${instalacion}`;
     const eII = porItemIps.get(kII) ?? {
       anio: r.anio, mes: r.mes, marca: r.marca, referencia: ref,
       descripcion: (r.notas || "").trim() || ref, ips: r.cliente, nit: r.nit,
-      lista: r.lista, instalacion,
+      lista: listaCanon, instalacion,
       cantidad: 0, valor: 0, costo: 0,
     };
     eII.cantidad += r.cantidad; eII.valor += neto; eII.costo += r.costo;

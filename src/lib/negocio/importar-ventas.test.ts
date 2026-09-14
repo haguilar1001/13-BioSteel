@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   limpiarMonto, parseFechaMDY, cantidadesSospechosas,
   normalizaBodega, mapaInstalacionPorBodega, resolverInstalacion,
+  agregarVentas, type FilaVenta,
 } from "./importar-ventas";
 
 describe("limpiarMonto (ventas)", () => {
@@ -65,6 +66,44 @@ describe("parseFechaMDY", () => {
 describe("normalizaBodega", () => {
   it("mayúsculas, sin tildes, espacios simples", () => {
     assert.equal(normalizaBodega("bodega   cAmpbéll"), "BODEGA CAMPBELL");
+  });
+});
+
+// El reporte de SIESA trae la lista de precios a veces como código ("4") y a
+// veces ya resuelta como nombre ("SOAT"), según el mes. Sin normalizar, la
+// misma lista aparecía DOS veces en el filtro de Consumos —una por código y
+// otra por nombre— con la utilidad partida entre las dos filas. Se arregla
+// dentro de agregarVentas (no con un parche aparte sobre lo ya guardado: ese
+// parche se deshacía solo en el siguiente recálculo, porque escribirAgregados
+// reconstruye VentaItemIps entero cada vez).
+describe("agregarVentas — normaliza la lista de precios (código → nombre)", () => {
+  const fila = (over: Partial<FilaVenta>): FilaVenta => ({
+    nro: "FET-1", tipo: "OTRO", aprobada: true, ms: Date.UTC(2026, 0, 15),
+    anio: 2026, mes: 1, ips: "CLINICA X", suc: "", bod: "", notas: "TORNILLO", conv: "", proc: "", linea: "",
+    subtotal: 100, costo: 60, cliente: "CLINICA X", nit: "900", marca: "1003 - SAMPEDRO",
+    referencia: "REF1", cantidad: 1, lista: "",
+    ...over,
+  });
+
+  it("código y nombre de la misma lista se funden en una sola fila", () => {
+    const filas = [fila({ nro: "FET-1", lista: "4" }), fila({ nro: "FET-2", lista: "SOAT" })];
+    const agg = agregarVentas(filas, [], new Set());
+    assert.equal(agg.porItemIps.length, 1);
+    assert.equal(agg.porItemIps[0]!.lista, "SOAT");
+    assert.equal(agg.porItemIps[0]!.valor, 200);
+    assert.equal(agg.porItemIps[0]!.cantidad, 2);
+  });
+
+  it("dos listas distintas NO se mezclan", () => {
+    const filas = [fila({ nro: "FET-1", lista: "4" }), fila({ nro: "FET-2", lista: "5" })];
+    const agg = agregarVentas(filas, [], new Set());
+    assert.equal(agg.porItemIps.length, 2);
+    assert.deepEqual(new Set(agg.porItemIps.map((f) => f.lista)), new Set(["SOAT", "ARL"]));
+  });
+
+  it("una lista sin catálogo (código desconocido) queda tal cual", () => {
+    const agg = agregarVentas([fila({ lista: "777" })], [], new Set());
+    assert.equal(agg.porItemIps[0]!.lista, "777");
   });
 });
 
