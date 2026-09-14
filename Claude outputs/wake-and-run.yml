@@ -1,0 +1,75 @@
+# .github/workflows/wake-and-run.yml
+#
+# Cron por GitHub Actions que funciona contra un servicio de Railway con
+# Serverless activo. La diferencia con un cron normal es el reintento: el
+# primer request a un servicio dormido puede devolver 502 mientras arranca.
+#
+# Secrets que hay que crear en el repo (Settings -> Secrets and variables -> Actions):
+#   APP_CRON_URL   -> https://<tu-app>.up.railway.app/api/cron/<tarea>
+#   CRON_TOKEN     -> cadena larga aleatoria, la misma que valida el endpoint
+
+name: cron-diario
+
+on:
+  schedule:
+    # GitHub Actions evalua el cron en UTC. 11:00 UTC = 06:00 en Colombia.
+    # Ojo: los schedules de GitHub se retrasan bajo carga, a veces 5-15 min.
+    # Si la tarea tiene que correr a una hora exacta, esto no sirve.
+    - cron: '0 11 * * *'
+  workflow_dispatch:        # permite dispararlo a mano desde la pestana Actions
+
+concurrency:
+  # Evita que dos ejecuciones se pisen si una anterior sigue viva.
+  group: cron-diario
+  cancel-in-progress: false
+
+jobs:
+  disparar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Despertar el servicio y ejecutar la tarea
+        env:
+          URL: ${{ secrets.APP_CRON_URL }}
+          TOKEN: ${{ secrets.CRON_TOKEN }}
+        run: |
+          set -u
+          for intento in 1 2 3 4 5 6; do
+            codigo=$(curl -sS -o /tmp/respuesta.txt -w '%{http_code}' \
+                      --max-time 300 \
+                      -X POST "$URL" \
+                      -H "Authorization: Bearer $TOKEN" \
+                      -H "Content-Type: application/json" || echo 000)
+
+            echo "::group::Intento $intento -> HTTP $codigo"
+            cat /tmp/respuesta.txt || true
+            echo ""
+            echo "::endgroup::"
+
+            case "$codigo" in
+              200|204)
+                echo "Tarea ejecutada correctamente."
+                exit 0
+                ;;
+              401|403)
+                echo "::error::Token rechazado. Revisa CRON_TOKEN en el repo y en Railway."
+                exit 1
+                ;;
+              409)
+                echo "::warning::Ya hay una ejecucion en curso. Se considera exito."
+                exit 0
+                ;;
+              502|503|504|000)
+                # Servicio despertando o reiniciando: reintentar.
+                echo "Servicio no disponible todavia, esperando 20s..."
+                sleep 20
+                ;;
+              *)
+                echo "::error::Respuesta inesperada HTTP $codigo"
+                exit 1
+                ;;
+            esac
+          done
+
+          echo "::error::El servicio no respondio 200 despues de 6 intentos."
+          exit 1
