@@ -73,7 +73,7 @@ export interface FilaMovimiento {
 
 export interface FiltrosMov {
   anio: number;
-  mes?: number;
+  mes?: number[];
   categoriaId?: number[];
   q?: string;
 }
@@ -83,7 +83,7 @@ function whereMov(tipo: TipoMovimiento, f: FiltrosMov): Prisma.MovimientoFlujoWh
   return {
     tipo,
     anio: f.anio,
-    ...(f.mes ? { mes: f.mes } : {}),
+    ...(f.mes?.length ? { mes: { in: f.mes } } : {}),
     ...(f.categoriaId?.length ? { categoriaId: { in: f.categoriaId } } : {}),
     ...(q
       ? {
@@ -221,9 +221,9 @@ export interface FilaPresupuesto {
   ejecucion: number;  // real / presupuesto * 100
 }
 
-export async function presupuestoVsReal(anio: number, mes?: number): Promise<FilaPresupuesto[]> {
-  const wPres: Prisma.PresupuestoMensualWhereInput = { anio, ...(mes ? { mes } : {}) };
-  const wReal: Prisma.MovimientoFlujoWhereInput = { anio, tipo: "egreso", ...(mes ? { mes } : {}) };
+export async function presupuestoVsReal(anio: number, mes?: number[]): Promise<FilaPresupuesto[]> {
+  const wPres: Prisma.PresupuestoMensualWhereInput = { anio, ...(mes?.length ? { mes: { in: mes } } : {}) };
+  const wReal: Prisma.MovimientoFlujoWhereInput = { anio, tipo: "egreso", ...(mes?.length ? { mes: { in: mes } } : {}) };
 
   const [cats, pres, real] = await Promise.all([
     prisma.categoriaFlujo.findMany({ select: { id: true, nombre: true, orden: true } }),

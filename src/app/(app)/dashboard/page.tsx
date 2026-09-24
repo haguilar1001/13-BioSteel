@@ -52,7 +52,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   const [meses, tot, presup, cxp, oblig, obligLista, indicadores, ventas] = verCxp
     ? await Promise.all([
-        flujoMensual(ANIO), totalesFlujo(ANIO), presupuestoVsReal(ANIO, mesEgr),
+        flujoMensual(ANIO), totalesFlujo(ANIO), presupuestoVsReal(ANIO, mesEgr ? [mesEgr] : undefined),
         resumenCxp(), resumenObligaciones(), listarObligaciones(),
         calcularIndicadores(usuario, alcInd), ventaMensualDetalle(ANIO),
       ])
@@ -113,10 +113,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   // Anillo Top 5 de egresos del mes corriente (fallback al último mes con
   // egresos si el mes en curso aún no registra movimientos).
   let mesDonut: number | null = mesActual;
-  let gruposDonut = verCxp ? (await presupuestoVsReal(ANIO, mesActual)).filter((p) => p.real > 0) : [];
+  let gruposDonut = verCxp ? (await presupuestoVsReal(ANIO, [mesActual])).filter((p) => p.real > 0) : [];
   if (verCxp && gruposDonut.length === 0 && mesCerrado && mesCerrado !== mesActual) {
     mesDonut = mesCerrado;
-    gruposDonut = (await presupuestoVsReal(ANIO, mesCerrado)).filter((p) => p.real > 0);
+    gruposDonut = (await presupuestoVsReal(ANIO, [mesCerrado])).filter((p) => p.real > 0);
   }
   if (gruposDonut.length === 0) mesDonut = null;
   gruposDonut.sort((a, b) => b.real - a.real);

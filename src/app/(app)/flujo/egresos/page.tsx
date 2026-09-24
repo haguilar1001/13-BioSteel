@@ -24,13 +24,14 @@ export default async function EgresosPage({
   const { usuario } = await requirePermiso("cxp.view");
   const puedeGestionar = await puede(usuario, "flujo.manage");
   const sp = await searchParams;
-  const mes = sp.mes && /^\d+$/.test(sp.mes) ? Number(sp.mes) : undefined;
+  const mes = listaDe(sp.mes, new Set(Array.from({ length: 12 }, (_, i) => String(i + 1)))).map(Number);
   const q = sp.q;
   const vista = sp.vista === "detalle" ? "detalle" : "proveedor";
   const categorias = await listarCategorias();
   const catsEdit = puedeGestionar ? await categoriasPorTipo("egreso") : [];
   const categoriaId = listaDe(sp.grupo, new Set(categorias.map((c) => String(c.id)))).map(Number);
   const opCategorias: OpcionMulti[] = categorias.map((c) => ({ value: String(c.id), label: c.nombre }));
+  const opMeses: OpcionMulti[] = Array.from({ length: 12 }, (_, i) => i + 1).map((m) => ({ value: String(m), label: MESES_LABEL[m]! }));
 
   const campos = vista === "proveedor" ? ["tercero", "cantidad", "valor"] : ["fecha", "grupo", "tercero", "detalle", "observacion", "valor"];
   const campoDefault = vista === "proveedor" ? "valor" : "fecha";
@@ -39,7 +40,7 @@ export default async function EgresosPage({
 
   const base = (over: { vista?: string; orden?: string; dir?: string } = {}) => {
     const p = new URLSearchParams();
-    if (mes) p.set("mes", String(mes));
+    if (mes.length) p.set("mes", mes.join(","));
     if (categoriaId.length) p.set("grupo", categoriaId.join(","));
     if (q) p.set("q", q);
     const v = over.vista ?? vista;
@@ -67,17 +68,12 @@ export default async function EgresosPage({
       {vista === "proveedor" && <input type="hidden" name="vista" value="proveedor" />}
       {sp.orden && <input type="hidden" name="orden" value={campo} />}
       {sp.orden && <input type="hidden" name="dir" value={dir} />}
-      <select name="mes" defaultValue={mes ?? ""} className="select">
-        <option value="">Todos los meses</option>
-        {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-          <option key={m} value={m}>{MESES_LABEL[m]}</option>
-        ))}
-      </select>
+      <MultiSelect name="mes" options={opMeses} selected={mes.map(String)} placeholder="Todos los meses" />
       <MultiSelect name="grupo" options={opCategorias} selected={categoriaId.map(String)} placeholder="Todos los grupos" />
       <input type="search" name="q" defaultValue={q ?? ""} placeholder="Tercero, NIT, observación…" className="select" style={{ minWidth: 200 }} />
       <button type="submit" className="btn primary">Filtrar</button>
       <a href={base()} className="btn">Limpiar</a>
-      <a href={`/flujo/export?tipo=egreso&anio=${ANIO}${mes ? `&mes=${mes}` : ""}${categoriaId.length ? `&grupo=${categoriaId.join(",")}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}`} className="btn" title="Descargar en Excel el listado filtrado">⬇️ Excel</a>
+      <a href={`/flujo/export?tipo=egreso&anio=${ANIO}${mes.length ? `&mes=${mes.join(",")}` : ""}${categoriaId.length ? `&grupo=${categoriaId.join(",")}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}`} className="btn" title="Descargar en Excel el listado filtrado">⬇️ Excel</a>
       <BotonImprimir />
       <span style={{ flex: 1 }} />
       <a href={base({ vista: "detalle" })} className={`btn${vista === "detalle" ? " primary" : ""}`}>Detalle</a>
@@ -96,7 +92,7 @@ export default async function EgresosPage({
     const total = filas.reduce((s, f) => s + f.total, 0);
     return (
       <div className="card">
-        <div className="chart-head">Egresos {ANIO} · por proveedor <span className="hact">{mes ? MESES_LABEL[mes] : "todos los meses"} · clic en columnas para ordenar</span></div>
+        <div className="chart-head">Egresos {ANIO} · por proveedor <span className="hact">{mes.length ? mes.map((m) => MESES_LABEL[m]).join(", ") : "todos los meses"} · clic en columnas para ordenar</span></div>
         <div className="card-body" style={{ paddingBottom: 0 }}>{filtros}</div>
         <div className="tbl-wrap">
           <table className="tabla-fit">

@@ -16,7 +16,9 @@ export async function GET(req: NextRequest) {
   const tipo: TipoMovimiento = sp.get("tipo") === "egreso" ? "egreso" : "ingreso";
   const anio = Number(sp.get("anio")) || new Date().getFullYear();
   const mesRaw = sp.get("mes");
-  const mes = mesRaw && /^\d+$/.test(mesRaw) ? Number(mesRaw) : undefined;
+  const mes = mesRaw
+    ? mesRaw.split(",").map((s) => s.trim()).filter((s) => /^\d+$/.test(s)).map(Number)
+    : undefined;
   const grupoRaw = sp.get("grupo");
   const categoriaId = grupoRaw
     ? grupoRaw.split(",").map((s) => s.trim()).filter((s) => /^\d+$/.test(s)).map(Number)
@@ -34,6 +36,6 @@ export async function GET(req: NextRequest) {
     encabezado: ["Fecha", "Categoría", "Tercero", "NIT", "Detalle", "Observación", "Valor"],
     filas: cuerpo,
     anchos: [12, 22, 34, 14, 40, 30, 16],
-    archivo: `flujo-${tipo === "ingreso" ? "ingresos" : "egresos"}-${anio}${mes ? `-${String(mes).padStart(2, "0")}` : ""}.xlsx`,
+    archivo: `flujo-${tipo === "ingreso" ? "ingresos" : "egresos"}-${anio}${mes?.length === 1 ? `-${String(mes[0]).padStart(2, "0")}` : ""}.xlsx`,
   });
 }

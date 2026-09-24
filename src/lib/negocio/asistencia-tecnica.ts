@@ -169,9 +169,9 @@ export function conAdversos(evs: Evaluacion[]): Evaluacion[] {
 export interface Pqrs { anio: number; mes: number; casos: number; observacion: string }
 
 /** PQRS del periodo. Se lleva aparte: no sale de las evaluaciones. */
-export async function pqrs(anio: number, mes?: number): Promise<Pqrs[]> {
+export async function pqrs(anio: number, mes?: number[]): Promise<Pqrs[]> {
   return prisma.pqrsMes.findMany({
-    where: { anio, ...(mes ? { mes } : {}) },
+    where: { anio, ...(mes?.length ? { mes: { in: mes } } : {}) },
     orderBy: { mes: "asc" },
     select: { anio: true, mes: true, casos: true, observacion: true },
   });

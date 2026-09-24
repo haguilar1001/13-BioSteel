@@ -313,7 +313,7 @@ const presupuesto: Intent = {
   async run(c) {
     const anio = elegirAnio(c.anios, [], c.anioActual);
     const mes = c.meses.length === 1 ? c.meses[0] : undefined;
-    const filas = await flujo.presupuestoVsReal(anio, mes);
+    const filas = await flujo.presupuestoVsReal(anio, mes !== undefined ? [mes] : undefined);
     if (!filas.length) return vacio("Presupuesto", `No hay presupuesto/ejecución para ${anio}.`);
     return {
       ok: true,

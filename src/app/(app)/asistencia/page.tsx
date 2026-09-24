@@ -58,14 +58,14 @@ export default async function AsistenciaPage({
 
   const anio = sp.anio && anios.includes(Number(sp.anio)) ? Number(sp.anio) : anios[anios.length - 1]!;
   const mesesDisp = await mesesConEvaluaciones(anio);
-  const mes = sp.mes && mesesDisp.includes(Number(sp.mes)) ? Number(sp.mes) : undefined;
+  const mes = listaDe(sp.mes, new Set(mesesDisp.map(String))).map(Number);
 
   // El año completo alimenta las tendencias; el periodo elegido, todo lo demás.
-  const [delAnio, casosPqrs] = await Promise.all([evaluaciones(anio), pqrs(anio, mes)]);
+  const [delAnio, casosPqrs] = await Promise.all([evaluaciones(anio), pqrs(anio, mes.length ? mes : undefined)]);
   const asesoresDisp = [...new Set(delAnio.map((e) => e.asesor))].sort();
   const asesor = listaDe(sp.asesor, new Set(asesoresDisp));
 
-  const periodo = delAnio.filter((e) => (!mes || e.mes === mes) && (!asesor.length || asesor.includes(e.asesor)));
+  const periodo = delAnio.filter((e) => (!mes.length || mes.includes(e.mes)) && (!asesor.length || asesor.includes(e.asesor)));
   const total = agregar(periodo);
   const serie = porMes(delAnio.filter((e) => !asesor.length || asesor.includes(e.asesor)));
   const asesores = porAsesor(periodo);
@@ -75,7 +75,10 @@ export default async function AsistenciaPage({
 
   const mejor = serie.length ? serie.reduce((a, b) => (b.final > a.final ? b : a)) : undefined;
   const peor = serie.length ? serie.reduce((a, b) => (b.final < a.final ? b : a)) : undefined;
-  const etiquetaPeriodo = mes ? `${MES_LARGO[mes]} ${anio}` : `${anio}`;
+  const etiquetaPeriodo = mes.length === 1 ? `${MES_LARGO[mes[0]!]} ${anio}`
+    : mes.length > 1 ? `${mes.map((m) => MES_CORTO[m]).join(", ")} ${anio}`
+    : `${anio}`;
+  const opMeses: OpcionMulti[] = mesesDisp.map((m) => ({ value: String(m), label: MES_LARGO[m]! }));
   const opAsesores: OpcionMulti[] = asesoresDisp.map((a) => ({ value: a, label: a }));
   const asesorTxt = asesor.length ? ` · ${asesor.join(", ")}` : "";
 
@@ -96,10 +99,7 @@ export default async function AsistenciaPage({
               {anios.map((a) => <option key={a} value={a}>{a}</option>)}
             </select>
             <label className="flag" style={{ alignSelf: "center" }}>Mes:</label>
-            <select name="mes" defaultValue={mes ?? ""} className="select">
-              <option value="">Todo el año</option>
-              {mesesDisp.map((m) => <option key={m} value={m}>{MES_LARGO[m]}</option>)}
-            </select>
+            <MultiSelect name="mes" options={opMeses} selected={mes.map(String)} placeholder="Todo el año" />
             <label className="flag" style={{ alignSelf: "center" }}>Asesor:</label>
             <MultiSelect name="asesor" options={opAsesores} selected={asesor} placeholder="Todos" />
           </FiltroAuto>

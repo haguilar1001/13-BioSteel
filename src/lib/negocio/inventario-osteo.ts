@@ -508,7 +508,7 @@ export async function bodegas(): Promise<OpcionBodega[]> {
 }
 
 export interface FiltroMovimientos {
-  anio: number; mes?: number;
+  anio: number; mes?: number[];
   bodega?: string[]; instalacion?: number[]; tipoDoc?: string[];
   /**
    * Columna MARCA del export ("1003 - SAMPEDRO"). En SIESA la marca ES la casa
@@ -521,7 +521,7 @@ export interface FiltroMovimientos {
 /** Cláusula WHERE compartida por las consultas de movimientos. */
 function whereMov(f: FiltroMovimientos): string {
   const p: string[] = [`m.anio = ${f.anio}`];
-  if (f.mes) p.push(`m.mes = ${f.mes}`);
+  if (f.mes && f.mes.length) p.push(`m.mes IN (${f.mes.join(",")})`);
   if (f.bodega && f.bodega.length) p.push(`m."bodegaCodigo" IN (${f.bodega.map(lit).join(",")})`);
   if (f.instalacion && f.instalacion.length) {
     const validas = f.instalacion.filter((i) => NOMBRE_INSTALACION[i]);
@@ -559,7 +559,7 @@ export async function saldoDelPeriodo(f: FiltroMovimientos): Promise<SaldoPeriod
   const vacio = { disponible: false, inicial: 0, final: 0, mesInicial: 0, mesFinal: 0 };
 
   const cond: string[] = [`anio = ${f.anio}`];
-  if (f.mes) cond.push(`mes = ${f.mes}`);
+  if (f.mes && f.mes.length) cond.push(`mes IN (${f.mes.join(",")})`);
   if (f.instalacion && f.instalacion.length) {
     const validas = f.instalacion.filter((i) => NOMBRE_INSTALACION[i]);
     if (validas.length) cond.push(`instalacion IN (${validas.join(",")})`);

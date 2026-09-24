@@ -56,9 +56,12 @@ export default async function CirugiasPage({
   }
   const anio = sp.anio && anios.includes(Number(sp.anio)) ? Number(sp.anio) : anios[anios.length - 1]!;
   const mesesDisp = await mesesConCirugias(anio);
-  const mes = sp.mes && mesesDisp.includes(Number(sp.mes)) ? Number(sp.mes) : undefined;
-  const diasDisp = mes ? await diasConCirugias(anio, mes) : [];
-  const dia = mes && sp.dia && diasDisp.includes(Number(sp.dia)) ? Number(sp.dia) : undefined;
+  const mes = listaDe(sp.mes, new Set(mesesDisp.map(String))).map(Number);
+  // El día solo se ofrece con un único mes elegido: "día 15" no significa
+  // nada si el filtro abarca varios meses a la vez.
+  const mesUnico = mes.length === 1 ? mes[0]! : undefined;
+  const diasDisp = mesUnico ? await diasConCirugias(anio, mesUnico) : [];
+  const dia = mesUnico && sp.dia && diasDisp.includes(Number(sp.dia)) ? Number(sp.dia) : undefined;
 
   const cat = await catalogosCx(anio);
   const ciudad = listaDe(sp.ciudad, new Set(cat.ciudades));
@@ -71,8 +74,11 @@ export default async function CirugiasPage({
     cirugiasPorCiudad(f), cirugiasPorGrupo(f), cirugiasPorMedico(f),
   ]);
 
-  const etiqueta = mes ? `${dia ? `${dia} de ` : ""}${MES_LARGO[mes]} ${anio}` : `${anio}`;
+  const etiqueta = mesUnico ? `${dia ? `${dia} de ` : ""}${MES_LARGO[mesUnico]} ${anio}`
+    : mes.length > 1 ? `${mes.map((m) => MES_CORTO[m]).join(", ")} ${anio}`
+    : `${anio}`;
   const cobColor = resumen.coberturaPct >= 0.7 ? "var(--ok)" : resumen.coberturaPct >= 0.5 ? "var(--w1)" : "var(--bad)";
+  const opMeses: OpcionMulti[] = mesesDisp.map((m) => ({ value: String(m), label: MES_LARGO[m]! }));
   const opCiudades: OpcionMulti[] = cat.ciudades.map((c) => ({ value: c, label: c }));
   const opGrupos: OpcionMulti[] = cat.grupos.map((g) => ({ value: g, label: g }));
   const opAsesores: OpcionMulti[] = cat.asesores.map((a) => ({ value: a, label: a }));
@@ -94,13 +100,10 @@ export default async function CirugiasPage({
               {anios.map((a) => <option key={a} value={a}>{a}</option>)}
             </select>
             <label className="flag" style={{ alignSelf: "center" }}>Mes:</label>
-            <select name="mes" defaultValue={mes ?? ""} className="select">
-              <option value="">Todo el año</option>
-              {mesesDisp.map((m) => <option key={m} value={m}>{MES_LARGO[m]}</option>)}
-            </select>
+            <MultiSelect name="mes" options={opMeses} selected={mes.map(String)} placeholder="Todo el año" />
             <label className="flag" style={{ alignSelf: "center" }}>Día:</label>
-            <select name="dia" defaultValue={dia ?? ""} className="select" disabled={!mes} title={mes ? undefined : "Elige un mes primero"}>
-              <option value="">{mes ? "Todo el mes" : "—"}</option>
+            <select name="dia" defaultValue={dia ?? ""} className="select" disabled={!mesUnico} title={mesUnico ? undefined : "Elige un solo mes primero"}>
+              <option value="">{mesUnico ? "Todo el mes" : "—"}</option>
               {diasDisp.map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
             <label className="flag" style={{ alignSelf: "center" }}>Ciudad:</label>
@@ -109,7 +112,7 @@ export default async function CirugiasPage({
             <MultiSelect name="grupo" options={opGrupos} selected={grupo} placeholder="Todos" />
             <label className="flag" style={{ alignSelf: "center" }}>Asesor:</label>
             <MultiSelect name="asesor" options={opAsesores} selected={asesor} placeholder="Todos" ancho={220} />
-            {(mes || ciudad.length || grupo.length || asesor.length)
+            {(mes.length || ciudad.length || grupo.length || asesor.length)
               ? <a href={`/asistencia/cirugias?anio=${anio}`} className="btn">Limpiar</a>
               : null}
           </FiltroAuto>

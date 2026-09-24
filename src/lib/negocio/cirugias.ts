@@ -8,7 +8,7 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 
-export interface FiltroCx { anio: number; mes?: number; dia?: number; ciudad?: string[]; grupo?: string[]; asesor?: string[] }
+export interface FiltroCx { anio: number; mes?: number[]; dia?: number; ciudad?: string[]; grupo?: string[]; asesor?: string[] }
 
 export const MES_CORTO = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 export const MES_LARGO = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
@@ -16,8 +16,9 @@ export const MES_LARGO = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Jun
 function where(f: FiltroCx): Prisma.CirugiaWhereInput {
   return {
     anio: f.anio,
-    ...(f.mes ? { mes: f.mes } : {}),
-    ...(f.mes && f.dia ? { dia: f.dia } : {}),
+    ...(f.mes?.length ? { mes: { in: f.mes } } : {}),
+    // El día solo tiene sentido dentro de un único mes elegido.
+    ...(f.mes?.length === 1 && f.dia ? { dia: f.dia } : {}),
     ...(f.ciudad?.length ? { ciudad: { in: f.ciudad } } : {}),
     ...(f.grupo?.length ? { grupo: { in: f.grupo } } : {}),
     ...(f.asesor?.length ? { asesor: { in: f.asesor } } : {}),

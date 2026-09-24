@@ -41,7 +41,7 @@ export default async function MovimientosPage({
 
   const anio = sp.anio && anios.includes(Number(sp.anio)) ? Number(sp.anio) : anios[anios.length - 1]!;
   const meses = await mesesConMovimientos(anio);
-  const mes = sp.mes && meses.includes(Number(sp.mes)) ? Number(sp.mes) : undefined;
+  const mes = listaDe(sp.mes, new Set(meses.map(String))).map(Number);
   const catalogo = await bodegas();
   const bodegasValidas = new Set(catalogo.map((b) => b.codigo));
   const bodega = listaDe(sp.bodega, bodegasValidas);
@@ -72,9 +72,11 @@ export default async function MovimientosPage({
   // detalle, y si no el último del año que sí lo tenga, diciéndolo en pantalla.
   // El NETO en cambio siempre se puede: sale del propio movimiento.
   const mesesBodega = await mesesConBodega(anio);
-  const mesSaldo = mes && mesesBodega.includes(mes)
-    ? mes
-    : (!mes ? mesesBodega[mesesBodega.length - 1] : undefined);
+  // Con varios meses elegidos se muestra el saldo del más reciente que sí
+  // tenga detalle por bodega (el saldo es un corte, no algo que se sume).
+  const mesSaldo = mes.length
+    ? [...mesesBodega].filter((m) => mes.includes(m)).pop()
+    : mesesBodega[mesesBodega.length - 1];
   const saldoBodega = new Map<string, number>();
   if (mesSaldo) {
     for (const b of await bodegasConSaldo(anio, mesSaldo)) {
@@ -84,7 +86,9 @@ export default async function MovimientosPage({
   }
 
   const bodegaSel = bodega.length === 1 ? catalogo.find((b) => b.codigo === bodega[0]) : undefined;
-  const etiqueta = mes ? `${MES_LARGO[mes]} ${anio}` : `${anio}`;
+  const etiqueta = mes.length === 1 ? `${MES_LARGO[mes[0]!]} ${anio}`
+    : mes.length > 1 ? `${mes.map((m) => MES_CORTO[m]).join(", ")} ${anio}`
+    : `${anio}`;
   const neto = kpi.costoEntradas - kpi.costoSalidas;
 
   // El saldo sale del balance, que va por su propio calendario: si el mes
@@ -103,6 +107,7 @@ export default async function MovimientosPage({
   const ultimoMov = meses[meses.length - 1] ?? 0;
   const saldoRezagado = saldo.disponible && saldo.mesFinal < ultimoMov;
 
+  const opMeses: OpcionMulti[] = meses.map((m) => ({ value: String(m), label: MES_LARGO[m]! }));
   const opBodegas: OpcionMulti[] = catalogo.map((b) => ({ value: b.codigo, label: `${b.codigo} · ${b.descripcion}`, sub: b.ciudad || undefined }));
   const opInstalaciones: OpcionMulti[] = INSTALACIONES_CON_MATERIAL.map((i) => ({ value: String(i), label: `${i} · ${NOMBRE_INSTALACION[i]}` }));
   const opTipos: OpcionMulti[] = tiposOpciones.map((t) => ({ value: t.tipoDoc, label: `${t.tipoDoc} · ${t.descripcion}` }));
@@ -129,10 +134,7 @@ export default async function MovimientosPage({
               {anios.map((a) => <option key={a} value={a}>{a}</option>)}
             </select>
             <label className="flag" style={{ alignSelf: "center" }}>Mes:</label>
-            <select name="mes" defaultValue={mes ?? ""} className="select">
-              <option value="">Todo el año</option>
-              {meses.map((m) => <option key={m} value={m}>{MES_LARGO[m]}</option>)}
-            </select>
+            <MultiSelect name="mes" options={opMeses} selected={mes.map(String)} placeholder="Todo el año" />
             <label className="flag" style={{ alignSelf: "center" }}>Bodega:</label>
             <MultiSelect name="bodega" options={opBodegas} selected={bodega} placeholder="Todas" ancho={300} />
             <label className="flag" style={{ alignSelf: "center" }}>Instalación:</label>
@@ -277,7 +279,7 @@ export default async function MovimientosPage({
                 mes con detalle por bodega — no del periodo mostrado.</>
             ) : (
               <>El <b>Neto</b> es entradas − salidas del periodo filtrado. El saldo por bodega no se
-                puede mostrar: el balance de {mes ? MES_CORTO[mes] + " " : ""}{anio} se cargó con el
+                puede mostrar: el balance de {mes.length ? mes.map((m) => MES_CORTO[m]).join(", ") + " " : ""}{anio} se cargó con el
                 export viejo, que solo llega hasta instalación.</>
             )}
           </div>

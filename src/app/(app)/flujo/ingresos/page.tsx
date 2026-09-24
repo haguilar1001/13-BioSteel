@@ -10,6 +10,8 @@ import { listarMovimientos, movimientosPorTercero, categoriasPorTipo, MESES_LABE
 import { SelectorCategoria } from "../SelectorCategoria";
 import { BotonImprimir } from "../../_components/BotonImprimir";
 import { FiltroAuto } from "../../_components/FiltroAuto";
+import { MultiSelect, type OpcionMulti } from "../../_components/MultiSelect";
+import { listaDe } from "../../_components/filtro-multi";
 
 const ANIO = 2026;
 const DEF_DIR: Record<string, DirOrden> = { fecha: "desc", tercero: "asc", detalle: "asc", observacion: "asc", valor: "desc", cantidad: "desc" };
@@ -23,7 +25,8 @@ export default async function IngresosPage({
   const puedeGestionar = await puede(usuario, "flujo.manage");
   const catsEdit = puedeGestionar ? await categoriasPorTipo("ingreso") : [];
   const sp = await searchParams;
-  const mes = sp.mes && /^\d+$/.test(sp.mes) ? Number(sp.mes) : undefined;
+  const mes = listaDe(sp.mes, new Set(Array.from({ length: 12 }, (_, i) => String(i + 1)))).map(Number);
+  const opMeses: OpcionMulti[] = Array.from({ length: 12 }, (_, i) => i + 1).map((m) => ({ value: String(m), label: MESES_LABEL[m]! }));
   const q = sp.q;
   const vista = sp.vista === "detalle" ? "detalle" : "cliente";
 
@@ -35,7 +38,7 @@ export default async function IngresosPage({
 
   const base = (over: { vista?: string; orden?: string; dir?: string } = {}) => {
     const p = new URLSearchParams();
-    if (mes) p.set("mes", String(mes));
+    if (mes.length) p.set("mes", mes.join(","));
     if (q) p.set("q", q);
     const v = over.vista ?? vista;
     if (v === "cliente") p.set("vista", "cliente");
@@ -63,16 +66,11 @@ export default async function IngresosPage({
       {vista === "cliente" && <input type="hidden" name="vista" value="cliente" />}
       {sp.orden && <input type="hidden" name="orden" value={campo} />}
       {sp.orden && <input type="hidden" name="dir" value={dir} />}
-      <select name="mes" defaultValue={mes ?? ""} className="select">
-        <option value="">Todos los meses</option>
-        {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-          <option key={m} value={m}>{MESES_LABEL[m]}</option>
-        ))}
-      </select>
+      <MultiSelect name="mes" options={opMeses} selected={mes.map(String)} placeholder="Todos los meses" />
       <input type="search" name="q" defaultValue={q ?? ""} placeholder="Tercero, NIT, observación…" className="select" style={{ minWidth: 220 }} />
       <button type="submit" className="btn primary">Filtrar</button>
       <a href={base()} className="btn">Limpiar</a>
-      <a href={`/flujo/export?tipo=ingreso&anio=${ANIO}${mes ? `&mes=${mes}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}`} className="btn" title="Descargar en Excel el listado filtrado">⬇️ Excel</a>
+      <a href={`/flujo/export?tipo=ingreso&anio=${ANIO}${mes.length ? `&mes=${mes.join(",")}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}`} className="btn" title="Descargar en Excel el listado filtrado">⬇️ Excel</a>
       <BotonImprimir />
       <span style={{ flex: 1 }} />
       <a href={base({ vista: "detalle" })} className={`btn${vista === "detalle" ? " primary" : ""}`}>Detalle</a>
@@ -91,7 +89,7 @@ export default async function IngresosPage({
     const total = filas.reduce((s, f) => s + f.total, 0);
     return (
       <div className="card">
-        <div className="chart-head">Ingresos {ANIO} · por cliente <span className="hact">{mes ? MESES_LABEL[mes] : "todos los meses"} · clic en columnas para ordenar</span></div>
+        <div className="chart-head">Ingresos {ANIO} · por cliente <span className="hact">{mes.length ? mes.map((m) => MESES_LABEL[m]).join(", ") : "todos los meses"} · clic en columnas para ordenar</span></div>
         <div className="card-body" style={{ paddingBottom: 0 }}>{filtros}</div>
         <div className="tbl-wrap">
           <table className="tabla-fit">

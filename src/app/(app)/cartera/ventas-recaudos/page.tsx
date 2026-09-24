@@ -47,7 +47,7 @@ export default async function VentasRecaudosPage({
 
   const [ventas, recaudos, internos] = await Promise.all([
     ventaPorCliente(anio, mes ? [mes] : undefined),
-    movimientosPorTercero("ingreso", { anio, mes }),
+    movimientosPorTercero("ingreso", { anio, mes: mes ? [mes] : undefined }),
     nombresInternos(),
   ]);
   // Excluye internos / partes relacionadas (p.ej. la propia BioSteel).

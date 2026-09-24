@@ -4,6 +4,8 @@ import { formatPorcentaje } from "@/lib/format";
 import { Monto } from "../../../_components/Monto";
 import { presupuestoVsReal, flujoMensual, MESES_LABEL } from "@/lib/negocio/flujo";
 import { FiltroAuto } from "../../../_components/FiltroAuto";
+import { MultiSelect, type OpcionMulti } from "../../../_components/MultiSelect";
+import { listaDe } from "../../../_components/filtro-multi";
 import { CeldaEgreso } from "../_semaforo";
 
 const ANIO = 2026;
@@ -11,9 +13,10 @@ const ANIO = 2026;
 export default async function PptoEgresosPage({ searchParams }: { searchParams: Promise<{ mes?: string }> }) {
   await requirePermiso("cxp.view");
   const sp = await searchParams;
-  const mes = sp.mes && /^\d+$/.test(sp.mes) ? Number(sp.mes) : undefined;
+  const mes = listaDe(sp.mes, new Set(Array.from({ length: 12 }, (_, i) => String(i + 1)))).map(Number);
+  const opMeses: OpcionMulti[] = Array.from({ length: 12 }, (_, i) => i + 1).map((m) => ({ value: String(m), label: MESES_LABEL[m]! }));
 
-  const [meses, filas] = await Promise.all([flujoMensual(ANIO), presupuestoVsReal(ANIO, mes)]);
+  const [meses, filas] = await Promise.all([flujoMensual(ANIO), presupuestoVsReal(ANIO, mes.length ? mes : undefined)]);
 
   const totMes = meses.reduce((a, m) => ({ pres: a.pres + m.presupuesto, real: a.real + m.egresos }), { pres: 0, real: 0 });
   const cumplMesTot = totMes.pres > 0 ? (totMes.real / totMes.pres) * 100 : 0;
@@ -60,15 +63,10 @@ export default async function PptoEgresosPage({ searchParams }: { searchParams: 
 
       {/* --- Ejecución por grupo --- */}
       <div className="card">
-        <div className="chart-head">Ejecución por grupo <span className="hact">{mes ? MESES_LABEL[mes] : "año corrido"}</span></div>
+        <div className="chart-head">Ejecución por grupo <span className="hact">{mes.length ? mes.map((m) => MESES_LABEL[m]).join(", ") : "año corrido"}</span></div>
         <div className="card-body" style={{ paddingBottom: 0 }}>
           <FiltroAuto className="toolbar">
-            <select name="mes" defaultValue={mes ?? ""} className="select">
-              <option value="">Año corrido</option>
-              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                <option key={m} value={m}>{MESES_LABEL[m]}</option>
-              ))}
-            </select>
+            <MultiSelect name="mes" options={opMeses} selected={mes.map(String)} placeholder="Año corrido" />
             <a href="/flujo/presupuesto/egresos" className="btn">Año corrido</a>
           </FiltroAuto>
         </div>
