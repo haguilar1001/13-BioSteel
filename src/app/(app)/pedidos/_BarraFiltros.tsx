@@ -3,7 +3,10 @@
 // arrastrar JSX.
 import { MES_LARGO } from "@/lib/negocio/pedidos";
 import { FiltroAuto } from "../_components/FiltroAuto";
+import { MultiSelect, type OpcionMulti } from "../_components/MultiSelect";
 import { hayFiltros, type ContextoFiltro } from "./_filtro";
+
+const opcionesDe = (vals: string[]): OpcionMulti[] => vals.map((v) => ({ value: v, label: v }));
 
 export function BarraFiltros({ c, extra }: { c: ContextoFiltro; extra?: React.ReactNode }) {
   const f = c.filtro;
@@ -32,40 +35,22 @@ export function BarraFiltros({ c, extra }: { c: ContextoFiltro; extra?: React.Re
       ) : null}
 
       <label className="flag" style={{ alignSelf: "center" }}>Ciudad:</label>
-      <select name="ciudad" defaultValue={f.ciudad ?? ""} className="select" style={{ maxWidth: 180 }}>
-        <option value="">Todas</option>
-        {c.ciudades.map((x) => <option key={x} value={x}>{x}</option>)}
-      </select>
+      <MultiSelect name="ciudad" options={opcionesDe(c.ciudades)} selected={f.ciudad ?? []} placeholder="Todas" ancho={180} />
 
       <label className="flag" style={{ alignSelf: "center" }}>Cliente:</label>
-      <select name="cliente" defaultValue={f.cliente ?? ""} className="select" style={{ maxWidth: 240 }}>
-        <option value="">Todos</option>
-        {c.clientes.map((x) => <option key={x} value={x}>{x}</option>)}
-      </select>
+      <MultiSelect name="cliente" options={opcionesDe(c.clientes)} selected={f.cliente ?? []} placeholder="Todos" ancho={240} />
 
       <label className="flag" style={{ alignSelf: "center" }}>Marca:</label>
-      <select name="marca" defaultValue={f.marca ?? ""} className="select" style={{ maxWidth: 220 }}>
-        <option value="">Todas</option>
-        {c.marcas.map((x) => <option key={x} value={x}>{x}</option>)}
-      </select>
+      <MultiSelect name="marca" options={opcionesDe(c.marcas)} selected={f.marca ?? []} placeholder="Todas" ancho={220} />
 
       <label className="flag" style={{ alignSelf: "center" }}>Línea:</label>
-      <select name="linea" defaultValue={f.linea ?? ""} className="select" style={{ maxWidth: 220 }}>
-        <option value="">Todas</option>
-        {c.lineas.map((x) => <option key={x} value={x}>{x}</option>)}
-      </select>
+      <MultiSelect name="linea" options={opcionesDe(c.lineas)} selected={f.linea ?? []} placeholder="Todas" ancho={220} />
 
       <label className="flag" style={{ alignSelf: "center" }}>Anatomía:</label>
-      <select name="anatomia" defaultValue={f.anatomia ?? ""} className="select" style={{ maxWidth: 200 }}>
-        <option value="">Todas</option>
-        {c.anatomias.map((x) => <option key={x} value={x}>{x}</option>)}
-      </select>
+      <MultiSelect name="anatomia" options={opcionesDe(c.anatomias)} selected={f.anatomia ?? []} placeholder="Todas" ancho={200} />
 
       <label className="flag" style={{ alignSelf: "center" }}>Estado:</label>
-      <select name="estado" defaultValue={f.estado ?? ""} className="select" style={{ maxWidth: 180 }}>
-        <option value="">Todos</option>
-        {c.estados.map((x) => <option key={x} value={x}>{x}</option>)}
-      </select>
+      <MultiSelect name="estado" options={opcionesDe(c.estados)} selected={f.estado ?? []} placeholder="Todos" ancho={180} />
 
       {hayFiltros(c) ? <a href={`?anio=${f.anio}`} className="btn">Limpiar filtros</a> : null}
       {extra}

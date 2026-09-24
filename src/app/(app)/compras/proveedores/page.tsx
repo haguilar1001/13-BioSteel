@@ -44,7 +44,7 @@ export default async function ProveedoresPage({ searchParams }: { searchParams: 
             </div>
             <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3 }}>
               Facturado por proveedor. La matriz es anual: el filtro de mes y día no aplica aquí.
-              {c.filtro.instalacion ? " El de instalación tampoco: el documento CCP no trae bodega." : ""}
+              {c.filtro.instalacion?.length ? " El de instalación tampoco: el documento CCP no trae bodega." : ""}
             </div>
           </div>
           <BarraFiltros

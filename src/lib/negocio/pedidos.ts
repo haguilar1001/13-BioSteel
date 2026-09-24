@@ -43,12 +43,12 @@ export interface FiltroPedidos {
   mes?: number;
   /** 1–31. Solo tiene efecto junto con `mes`. */
   dia?: number;
-  ciudad?: string;
-  cliente?: string;
-  marca?: string;
-  linea?: string;
-  anatomia?: string;
-  estado?: string;
+  ciudad?: string[];
+  cliente?: string[];
+  marca?: string[];
+  linea?: string[];
+  anatomia?: string[];
+  estado?: string[];
   proveedor?: string;
 }
 
@@ -58,12 +58,12 @@ function where(f: FiltroPedidos): Prisma.Sql {
   const partes: Prisma.Sql[] = [Prisma.sql`m."anio" = ${f.anio}`];
   if (f.mes) partes.push(Prisma.sql`m."mes" = ${f.mes}`);
   if (f.mes && f.dia) partes.push(Prisma.sql`m."dia" = ${f.dia}`);
-  if (f.ciudad) partes.push(Prisma.sql`m."ciudad" = ${f.ciudad}`);
-  if (f.cliente) partes.push(Prisma.sql`m."cliente" = ${f.cliente}`);
-  if (f.marca) partes.push(Prisma.sql`m."marca" = ${f.marca}`);
-  if (f.linea) partes.push(Prisma.sql`m."linea" = ${f.linea}`);
-  if (f.anatomia) partes.push(Prisma.sql`m."anatomia" = ${f.anatomia}`);
-  if (f.estado) partes.push(Prisma.sql`m."estado" = ${f.estado}`);
+  if (f.ciudad?.length) partes.push(Prisma.sql`m."ciudad" IN (${Prisma.join(f.ciudad)})`);
+  if (f.cliente?.length) partes.push(Prisma.sql`m."cliente" IN (${Prisma.join(f.cliente)})`);
+  if (f.marca?.length) partes.push(Prisma.sql`m."marca" IN (${Prisma.join(f.marca)})`);
+  if (f.linea?.length) partes.push(Prisma.sql`m."linea" IN (${Prisma.join(f.linea)})`);
+  if (f.anatomia?.length) partes.push(Prisma.sql`m."anatomia" IN (${Prisma.join(f.anatomia)})`);
+  if (f.estado?.length) partes.push(Prisma.sql`m."estado" IN (${Prisma.join(f.estado)})`);
   if (f.proveedor) partes.push(Prisma.sql`m."proveedor" = ${f.proveedor}`);
   return Prisma.join(partes, " AND ");
 }
@@ -74,12 +74,12 @@ export function whereInput(f: FiltroPedidos): Prisma.PedidoWhereInput {
     anio: f.anio,
     ...(f.mes ? { mes: f.mes } : {}),
     ...(f.mes && f.dia ? { dia: f.dia } : {}),
-    ...(f.ciudad ? { ciudad: f.ciudad } : {}),
-    ...(f.cliente ? { cliente: f.cliente } : {}),
-    ...(f.marca ? { marca: f.marca } : {}),
-    ...(f.linea ? { linea: f.linea } : {}),
-    ...(f.anatomia ? { anatomia: f.anatomia } : {}),
-    ...(f.estado ? { estado: f.estado } : {}),
+    ...(f.ciudad?.length ? { ciudad: { in: f.ciudad } } : {}),
+    ...(f.cliente?.length ? { cliente: { in: f.cliente } } : {}),
+    ...(f.marca?.length ? { marca: { in: f.marca } } : {}),
+    ...(f.linea?.length ? { linea: { in: f.linea } } : {}),
+    ...(f.anatomia?.length ? { anatomia: { in: f.anatomia } } : {}),
+    ...(f.estado?.length ? { estado: { in: f.estado } } : {}),
     ...(f.proveedor ? { proveedor: f.proveedor } : {}),
   };
 }

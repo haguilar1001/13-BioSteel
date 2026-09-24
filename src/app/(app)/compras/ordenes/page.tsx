@@ -49,8 +49,8 @@ export default async function OrdenesPage({ searchParams }: { searchParams: Prom
           <div style={{ marginBottom: 10 }}>
             <div className="eyebrow" style={{ fontSize: 15 }}>Órdenes de Compra · {c.etiqueta}</div>
             <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3 }}>
-              {formatNumero(kpi.ordenesCant)} órdenes · {c.filtro.proveedor ?? "todos los proveedores"}
-              {c.filtro.linea ? ` · ${c.filtro.linea}` : ""}
+              {formatNumero(kpi.ordenesCant)} órdenes · {c.filtro.proveedor?.length ? c.filtro.proveedor.join(", ") : "todos los proveedores"}
+              {c.filtro.linea?.length ? ` · ${c.filtro.linea.join(", ")}` : ""}
             </div>
           </div>
           <BarraFiltros

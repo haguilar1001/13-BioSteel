@@ -86,10 +86,10 @@ export const PARAMETROS_DEFECTO: ParametrosReposicion = {
 };
 
 export interface FiltroReposicion {
-  proveedor?: string;
-  marca?: string;
-  linea?: string;
-  ciudad?: string;
+  proveedor?: string[];
+  marca?: string[];
+  linea?: string[];
+  ciudad?: string[];
   /** Modelo de compra de la bodega: MAYORITARIO, PXP, CONSIGNACIÓN… */
   modeloCompra?: string;
   /** 101 propia · 102 consignación · 106 aprovechamiento. */
@@ -244,10 +244,10 @@ export async function calcularReposicion(
     Prisma.sql`(m."anio" * 100 + m."mes") BETWEEN ${desde} AND ${hastaClave}`,
     Prisma.sql`m."estado" IN (${Prisma.join(ESTADOS_DEMANDA.map((e) => Prisma.sql`${e}`))})`,
   ];
-  if (filtro.proveedor) cond.push(Prisma.sql`m."proveedor" = ${filtro.proveedor}`);
-  if (filtro.marca) cond.push(Prisma.sql`m."marca" = ${filtro.marca}`);
-  if (filtro.linea) cond.push(Prisma.sql`m."linea" = ${filtro.linea}`);
-  if (filtro.ciudad) cond.push(Prisma.sql`m."ciudad" = ${filtro.ciudad}`);
+  if (filtro.proveedor?.length) cond.push(Prisma.sql`m."proveedor" IN (${Prisma.join(filtro.proveedor)})`);
+  if (filtro.marca?.length) cond.push(Prisma.sql`m."marca" IN (${Prisma.join(filtro.marca)})`);
+  if (filtro.linea?.length) cond.push(Prisma.sql`m."linea" IN (${Prisma.join(filtro.linea)})`);
+  if (filtro.ciudad?.length) cond.push(Prisma.sql`m."ciudad" IN (${Prisma.join(filtro.ciudad)})`);
   if (filtro.instalacion) cond.push(Prisma.sql`m."instalacion" = ${filtro.instalacion}`);
   if (codigosDelModelo) {
     cond.push(Prisma.sql`m."bodegaCodigo" IN (${Prisma.join(codigosDelModelo.map((c) => Prisma.sql`${c}`))})`);

@@ -8,6 +8,8 @@
 import { requirePermiso } from "@/server/auth-context";
 import { formatNumero } from "@/lib/format";
 import { FiltroAuto } from "../_components/FiltroAuto";
+import { MultiSelect, type OpcionMulti } from "../_components/MultiSelect";
+import { listaDe } from "../_components/filtro-multi";
 import { LineasMensuales } from "../_components/charts/LineasMensuales";
 import {
   aniosConEvaluaciones, mesesConEvaluaciones, evaluaciones, pqrs,
@@ -61,11 +63,11 @@ export default async function AsistenciaPage({
   // El año completo alimenta las tendencias; el periodo elegido, todo lo demás.
   const [delAnio, casosPqrs] = await Promise.all([evaluaciones(anio), pqrs(anio, mes)]);
   const asesoresDisp = [...new Set(delAnio.map((e) => e.asesor))].sort();
-  const asesor = sp.asesor && asesoresDisp.includes(sp.asesor) ? sp.asesor : undefined;
+  const asesor = listaDe(sp.asesor, new Set(asesoresDisp));
 
-  const periodo = delAnio.filter((e) => (!mes || e.mes === mes) && (!asesor || e.asesor === asesor));
+  const periodo = delAnio.filter((e) => (!mes || e.mes === mes) && (!asesor.length || asesor.includes(e.asesor)));
   const total = agregar(periodo);
-  const serie = porMes(delAnio.filter((e) => !asesor || e.asesor === asesor));
+  const serie = porMes(delAnio.filter((e) => !asesor.length || asesor.includes(e.asesor)));
   const asesores = porAsesor(periodo);
   const especialistas = porCampo(periodo, "especialista");
   const adversos = conAdversos(periodo);
@@ -74,6 +76,8 @@ export default async function AsistenciaPage({
   const mejor = serie.length ? serie.reduce((a, b) => (b.final > a.final ? b : a)) : undefined;
   const peor = serie.length ? serie.reduce((a, b) => (b.final < a.final ? b : a)) : undefined;
   const etiquetaPeriodo = mes ? `${MES_LARGO[mes]} ${anio}` : `${anio}`;
+  const opAsesores: OpcionMulti[] = asesoresDisp.map((a) => ({ value: a, label: a }));
+  const asesorTxt = asesor.length ? ` · ${asesor.join(", ")}` : "";
 
   return (
     <>
@@ -97,10 +101,7 @@ export default async function AsistenciaPage({
               {mesesDisp.map((m) => <option key={m} value={m}>{MES_LARGO[m]}</option>)}
             </select>
             <label className="flag" style={{ alignSelf: "center" }}>Asesor:</label>
-            <select name="asesor" defaultValue={asesor ?? ""} className="select">
-              <option value="">Todos</option>
-              {asesoresDisp.map((a) => <option key={a} value={a}>{a}</option>)}
-            </select>
+            <MultiSelect name="asesor" options={opAsesores} selected={asesor} placeholder="Todos" />
           </FiltroAuto>
         </div>
       </div>
@@ -135,7 +136,7 @@ export default async function AsistenciaPage({
         <div className="card">
           <div className="chart-head">
             Comportamiento de la Calificación Final
-            <span className="hact">{anio}{asesor ? ` · ${asesor}` : ""}</span>
+            <span className="hact">{anio}{asesorTxt}</span>
           </div>
           <div className="card-body">
             {serie.length < 2 ? <div className="empty">Se necesitan al menos dos meses.</div> : (
@@ -285,7 +286,7 @@ export default async function AsistenciaPage({
       <div className="card">
         <div className="chart-head">
           Detalle de Evaluaciones
-          <span className="hact">{formatNumero(periodo.length)} registro(s) · {etiquetaPeriodo}{asesor ? ` · ${asesor}` : ""}</span>
+          <span className="hact">{formatNumero(periodo.length)} registro(s) · {etiquetaPeriodo}{asesorTxt}</span>
         </div>
         <div style={{ overflowX: "auto", maxHeight: 520, overflowY: "auto" }}>
           <table>

@@ -18,7 +18,9 @@ export async function GET(req: NextRequest) {
   const mesRaw = sp.get("mes");
   const mes = mesRaw && /^\d+$/.test(mesRaw) ? Number(mesRaw) : undefined;
   const grupoRaw = sp.get("grupo");
-  const categoriaId = grupoRaw && /^\d+$/.test(grupoRaw) ? Number(grupoRaw) : undefined;
+  const categoriaId = grupoRaw
+    ? grupoRaw.split(",").map((s) => s.trim()).filter((s) => /^\d+$/.test(s)).map(Number)
+    : undefined;
   const q = sp.get("q") ?? undefined;
 
   const filas = await exportarMovimientos(tipo, { anio, mes, categoriaId, q });

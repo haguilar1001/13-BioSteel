@@ -12,6 +12,7 @@ import {
   instalacionesConCompras, etiquetaInstalacion,
   MES_LARGO, type FiltroCompras,
 } from "@/lib/negocio/compras";
+import { listaDe } from "../_components/filtro-multi";
 
 export interface ParamsCompras {
   anio?: string; mes?: string; dia?: string;
@@ -53,10 +54,10 @@ export async function resolverFiltro(sp: ParamsCompras): Promise<ContextoFiltro 
     proveedoresConCompras(anio), lineasConCompras(anio), tiposDeCompra(),
     instalacionesConCompras(anio),
   ]);
-  const proveedor = sp.prov && proveedores.includes(sp.prov) ? sp.prov : undefined;
-  const linea = sp.linea && lineas.includes(sp.linea) ? sp.linea : undefined;
-  const tipoCompra = sp.tipo && tipos.includes(sp.tipo) ? sp.tipo : undefined;
-  const instalacion = sp.inst && insts.includes(Number(sp.inst)) ? Number(sp.inst) : undefined;
+  const proveedor = listaDe(sp.prov, new Set(proveedores));
+  const linea = listaDe(sp.linea, new Set(lineas));
+  const tipoCompra = listaDe(sp.tipo, new Set(tipos));
+  const instalacion = listaDe(sp.inst, new Set(insts.map(String))).map(Number);
   const instalaciones = insts.map((i) => ({ valor: i, label: etiquetaInstalacion(i) }));
 
   const filtro: FiltroCompras = { anio, mes, dia, proveedor, linea, tipoCompra, instalacion };
@@ -69,10 +70,10 @@ export async function resolverFiltro(sp: ParamsCompras): Promise<ContextoFiltro 
   const qs = new URLSearchParams({ anio: String(anio) });
   if (mes) qs.set("mes", String(mes));
   if (dia) qs.set("dia", String(dia));
-  if (proveedor) qs.set("prov", proveedor);
-  if (linea) qs.set("linea", linea);
-  if (tipoCompra) qs.set("tipo", tipoCompra);
-  if (instalacion) qs.set("inst", String(instalacion));
+  if (proveedor.length) qs.set("prov", proveedor.join(","));
+  if (linea.length) qs.set("linea", linea.join(","));
+  if (tipoCompra.length) qs.set("tipo", tipoCompra.join(","));
+  if (instalacion.length) qs.set("inst", instalacion.join(","));
 
   return { filtro, anios, meses, dias, proveedores, lineas, tipos, instalaciones, etiqueta, query: qs.toString() };
 }
@@ -81,9 +82,9 @@ export async function resolverFiltro(sp: ParamsCompras): Promise<ContextoFiltro 
 export function resumenFiltros(c: ContextoFiltro): string {
   const f = c.filtro;
   const partes: string[] = [];
-  partes.push(f.proveedor ?? "Todos los proveedores");
-  if (f.linea) partes.push(f.linea);
-  if (f.tipoCompra) partes.push(f.tipoCompra);
-  if (f.instalacion) partes.push(etiquetaInstalacion(f.instalacion));
+  partes.push(f.proveedor?.length ? f.proveedor.join(", ") : "Todos los proveedores");
+  if (f.linea?.length) partes.push(f.linea.join(", "));
+  if (f.tipoCompra?.length) partes.push(f.tipoCompra.join(", "));
+  if (f.instalacion?.length) partes.push(f.instalacion.map(etiquetaInstalacion).join(", "));
   return partes.join(" · ");
 }

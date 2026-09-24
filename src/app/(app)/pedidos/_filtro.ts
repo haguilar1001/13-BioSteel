@@ -14,6 +14,7 @@ import {
   lineasConPedidos, anatomiasConPedidos, estadosConPedidos,
   MES_LARGO, type FiltroPedidos,
 } from "@/lib/negocio/pedidos";
+import { listaDe } from "../_components/filtro-multi";
 
 export interface ParamsPedidos {
   anio?: string; mes?: string; dia?: string;
@@ -57,12 +58,12 @@ export async function resolverFiltro(sp: ParamsPedidos): Promise<ContextoFiltro 
     ciudadesConPedidos(anio), clientesConPedidos(anio), marcasConPedidos(anio),
     lineasConPedidos(anio), anatomiasConPedidos(anio), estadosConPedidos(anio),
   ]);
-  const ciudad = sp.ciudad && ciudades.includes(sp.ciudad) ? sp.ciudad : undefined;
-  const cliente = sp.cliente && clientes.includes(sp.cliente) ? sp.cliente : undefined;
-  const marca = sp.marca && marcas.includes(sp.marca) ? sp.marca : undefined;
-  const linea = sp.linea && lineas.includes(sp.linea) ? sp.linea : undefined;
-  const anatomia = sp.anatomia && anatomias.includes(sp.anatomia) ? sp.anatomia : undefined;
-  const estado = sp.estado && estados.includes(sp.estado) ? sp.estado : undefined;
+  const ciudad = listaDe(sp.ciudad, new Set(ciudades));
+  const cliente = listaDe(sp.cliente, new Set(clientes));
+  const marca = listaDe(sp.marca, new Set(marcas));
+  const linea = listaDe(sp.linea, new Set(lineas));
+  const anatomia = listaDe(sp.anatomia, new Set(anatomias));
+  const estado = listaDe(sp.estado, new Set(estados));
 
   const filtro: FiltroPedidos = { anio, mes, dia, ciudad, cliente, marca, linea, anatomia, estado };
 
@@ -73,12 +74,12 @@ export async function resolverFiltro(sp: ParamsPedidos): Promise<ContextoFiltro 
   const qs = new URLSearchParams({ anio: String(anio) });
   if (mes) qs.set("mes", String(mes));
   if (dia) qs.set("dia", String(dia));
-  if (ciudad) qs.set("ciudad", ciudad);
-  if (cliente) qs.set("cliente", cliente);
-  if (marca) qs.set("marca", marca);
-  if (linea) qs.set("linea", linea);
-  if (anatomia) qs.set("anatomia", anatomia);
-  if (estado) qs.set("estado", estado);
+  if (ciudad.length) qs.set("ciudad", ciudad.join(","));
+  if (cliente.length) qs.set("cliente", cliente.join(","));
+  if (marca.length) qs.set("marca", marca.join(","));
+  if (linea.length) qs.set("linea", linea.join(","));
+  if (anatomia.length) qs.set("anatomia", anatomia.join(","));
+  if (estado.length) qs.set("estado", estado.join(","));
 
   return { filtro, anios, meses, dias, ciudades, clientes, marcas, lineas, anatomias, estados, etiqueta, query: qs.toString() };
 }
@@ -86,17 +87,17 @@ export async function resolverFiltro(sp: ParamsPedidos): Promise<ContextoFiltro 
 /** Descripción corta de los filtros activos, bajo el título de cada pantalla. */
 export function resumenFiltros(c: ContextoFiltro): string {
   const f = c.filtro;
-  const partes: string[] = [f.ciudad ?? "Todas las ciudades"];
-  if (f.cliente) partes.push(f.cliente);
-  if (f.marca) partes.push(f.marca);
-  if (f.linea) partes.push(f.linea);
-  if (f.anatomia) partes.push(f.anatomia);
-  if (f.estado) partes.push(f.estado);
+  const partes: string[] = [f.ciudad?.length ? f.ciudad.join(", ") : "Todas las ciudades"];
+  if (f.cliente?.length) partes.push(f.cliente.join(", "));
+  if (f.marca?.length) partes.push(f.marca.join(", "));
+  if (f.linea?.length) partes.push(f.linea.join(", "));
+  if (f.anatomia?.length) partes.push(f.anatomia.join(", "));
+  if (f.estado?.length) partes.push(f.estado.join(", "));
   return partes.join(" · ");
 }
 
 /** true si hay algún filtro más allá del año (para ofrecer "Limpiar"). */
 export function hayFiltros(c: ContextoFiltro): boolean {
   const f = c.filtro;
-  return Boolean(f.mes || f.dia || f.ciudad || f.cliente || f.marca || f.linea || f.anatomia || f.estado);
+  return Boolean(f.mes || f.dia || f.ciudad?.length || f.cliente?.length || f.marca?.length || f.linea?.length || f.anatomia?.length || f.estado?.length);
 }

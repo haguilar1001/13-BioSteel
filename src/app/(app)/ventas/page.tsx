@@ -10,6 +10,8 @@ import { resumenAnual, ventaMensualDetalle, ventaPorCiudad, aniosConVenta, venta
 import { MapaCartera } from "../_components/charts/MapaCartera";
 import { LineasMensuales } from "../_components/charts/LineasMensuales";
 import { FiltroAuto } from "../_components/FiltroAuto";
+import { MultiSelect, type OpcionMulti } from "../_components/MultiSelect";
+import { listaDe } from "../_components/filtro-multi";
 
 const MESES = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 const MES_ABBR = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
@@ -30,15 +32,15 @@ export default async function VentasPage({ searchParams }: { searchParams: Promi
   const mesSel = mesNum >= 1 && mesNum <= 12 ? mesNum : null;
   const mesesFiltro = mesSel ? [mesSel] : undefined;
 
-  // Cliente seleccionado (o null = todos). El filtro afecta KPIs, tabla, líneas y mapa.
+  // Clientes seleccionados (o [] = todos). El filtro afecta KPIs, tabla, líneas y mapa.
   const clientes = await clientesConVenta(anio);
-  const cliSel = sp.cliente && clientes.includes(sp.cliente) ? sp.cliente : null;
+  const cliSel = listaDe(sp.cliente, new Set(clientes));
 
   const [kpi, mesesAct, mesesAnt, ciudades] = await Promise.all([
-    cliSel ? resumenAnualCliente(anio, cliSel, mesesFiltro) : resumenAnual(anio, mesesFiltro),
-    cliSel ? ventaMensualDetalleCliente(anio, cliSel) : ventaMensualDetalle(anio),
-    cliSel ? ventaMensualDetalleCliente(anio - 1, cliSel) : ventaMensualDetalle(anio - 1),
-    ventaPorCiudad(anio, mesesFiltro, cliSel ?? undefined),
+    cliSel.length ? resumenAnualCliente(anio, cliSel, mesesFiltro) : resumenAnual(anio, mesesFiltro),
+    cliSel.length ? ventaMensualDetalleCliente(anio, cliSel) : ventaMensualDetalle(anio),
+    cliSel.length ? ventaMensualDetalleCliente(anio - 1, cliSel) : ventaMensualDetalle(anio - 1),
+    ventaPorCiudad(anio, mesesFiltro, cliSel.length ? cliSel : undefined),
   ]);
 
   // Meses con venta cargada (para el selector de mes).
@@ -56,7 +58,7 @@ export default async function VentasPage({ searchParams }: { searchParams: Promi
   // Venta neta por día del mes actual (o del mes filtrado), desde VentaDia.
   // No aplica al filtrar por cliente (VentaDia no tiene desglose por cliente).
   const mesDia = mesSel ?? (mesActual >= 1 ? mesActual : 12);
-  const ventaDiaRaw = cliSel ? [] : await ventaNetaPorDia(anio, mesDia);
+  const ventaDiaRaw = cliSel.length ? [] : await ventaNetaPorDia(anio, mesDia);
   let accDia = 0;
   const ventaDia = ventaDiaRaw.map((d) => { accDia += d.valor; return { dia: d.dia, venta: d.valor, acumulado: accDia }; });
   const totalDia = accDia;
@@ -107,12 +109,13 @@ export default async function VentasPage({ searchParams }: { searchParams: Promi
   // mes actual, se extiende hasta ahí en vez de esconderla.
   const ultimoConVenta = mesesAct.reduce((max, m) => (m.venta ? m.mes : max), 1);
   const hastaMes = anio < hoy.getUTCFullYear() ? 12 : Math.max(mesActual, ultimoConVenta);
+  const opClientes: OpcionMulti[] = clientes.map((c) => ({ value: c, label: c }));
 
   return (
     <>
       <div className="card" style={{ marginBottom: 12 }}>
         <div className="card-body" style={{ paddingBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
-          <div className="eyebrow" style={{ fontSize: 15 }}>Informe de Ventas · {mesSel ? `${MESES[mesSel]} ` : ""}{anio}{cliSel ? ` · ${cliSel}` : ""}</div>
+          <div className="eyebrow" style={{ fontSize: 15 }}>Informe de Ventas · {mesSel ? `${MESES[mesSel]} ` : ""}{anio}{cliSel.length ? ` · ${cliSel.join(", ")}` : ""}</div>
           <FiltroAuto className="toolbar">
             <label className="flag" style={{ alignSelf: "center" }}>Año:</label>
             <select name="anio" defaultValue={anio} className="select">
@@ -124,10 +127,7 @@ export default async function VentasPage({ searchParams }: { searchParams: Promi
               {mesesDisponibles.map((m) => <option key={m} value={m}>{MESES[m]}</option>)}
             </select>
             <label className="flag" style={{ alignSelf: "center" }}>Cliente:</label>
-            <select name="cliente" defaultValue={cliSel ?? ""} className="select" style={{ maxWidth: 240 }}>
-              <option value="">Todos</option>
-              {clientes.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
+            <MultiSelect name="cliente" options={opClientes} selected={cliSel} placeholder="Todos" ancho={240} />
             <a href={`/ventas/export?anio=${anio}`} className="btn" title="Descargar ventas por mes en Excel">⬇️ Excel</a>
           </FiltroAuto>
         </div>
@@ -141,7 +141,7 @@ export default async function VentasPage({ searchParams }: { searchParams: Promi
         <div className="kpi kc k-w"><div className="klabel">% Utilidad</div><div className="kval num">{formatPorcentaje(kpi.margen)}</div></div>
       </div>
 
-      <div className={cliSel ? "grid" : "grid two"} style={{ marginBottom: 12, alignItems: "stretch" }}>
+      <div className={cliSel.length ? "grid" : "grid two"} style={{ marginBottom: 12, alignItems: "stretch" }}>
         {/* Tabla Mes vs Año Anterior */}
         <div className="card">
           <div className="chart-head">Ventas · Mes vs Año Anterior <span className="hact">{anio} vs {anio - 1}</span></div>
@@ -204,7 +204,7 @@ export default async function VentasPage({ searchParams }: { searchParams: Promi
         </div>
 
         {/* Venta por día del mes actual — no aplica al filtrar por cliente */}
-        {!cliSel && (
+        {!cliSel.length && (
         <div className="card">
           <div className="chart-head">Venta por día <span className="hact">{MESES[mesDia]} {anio}</span></div>
           <div className="tbl-wrap" style={{ maxHeight: 520, overflowY: "auto" }}>

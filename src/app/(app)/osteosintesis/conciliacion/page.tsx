@@ -11,6 +11,8 @@ import { requirePermiso } from "@/server/auth-context";
 import { formatNumero } from "@/lib/format";
 import { Monto } from "../../_components/Monto";
 import { FiltroAuto } from "../../_components/FiltroAuto";
+import { MultiSelect, type OpcionMulti } from "../../_components/MultiSelect";
+import { listaDe } from "../../_components/filtro-multi";
 import {
   aniosConBalance, conciliacion, cadenaDeSaldos, mesesConBalance,
   movimientosPorBodega, diferenciasPorReferencia, totalDiferencias,
@@ -47,10 +49,12 @@ export default async function ConciliacionPage({
   }
 
   const anio = sp.anio && anios.includes(Number(sp.anio)) ? Number(sp.anio) : anios[anios.length - 1]!;
-  const inst = sp.inst && NOMBRE_INSTALACION[Number(sp.inst)] ? Number(sp.inst) : undefined;
+  const instalacionesValidas = new Set(INSTALACIONES_CON_MATERIAL.map(String));
+  const inst = listaDe(sp.inst, instalacionesValidas).map(Number);
   const [filas, cadena, meses] = await Promise.all([
     conciliacion(anio), cadenaDeSaldos(inst), mesesConBalance(anio),
   ]);
+  const opInstalaciones: OpcionMulti[] = INSTALACIONES_CON_MATERIAL.map((i) => ({ value: String(i), label: `${i} · ${NOMBRE_INSTALACION[i]}` }));
 
   // Mes del detalle: el pedido, o el primero que no cuadre, o ninguno.
   const descuadrados = [...new Set(filas.filter((f) => !f.cuadra && !f.sinBalance).map((f) => f.mes))].sort((a, b) => a - b);
@@ -156,7 +160,7 @@ export default async function ConciliacionPage({
         <div className="chart-head">
           Cadena de Saldos
           <span className="hact">
-            {inst ? `${inst} · ${NOMBRE_INSTALACION[inst]}` : "todas las instalaciones"} · el final de un mes debe ser el inicial del siguiente
+            {inst.length ? inst.map((i) => `${i} · ${NOMBRE_INSTALACION[i]}`).join(", ") : "todas las instalaciones"} · el final de un mes debe ser el inicial del siguiente
           </span>
         </div>
         <div className="card-body" style={{ paddingBottom: 0 }}>
@@ -164,12 +168,7 @@ export default async function ConciliacionPage({
             <input type="hidden" name="anio" value={anio} />
             {mes && <input type="hidden" name="mes" value={mes} />}
             <label className="flag" style={{ alignSelf: "center" }}>Instalación:</label>
-            <select name="inst" defaultValue={inst ?? ""} className="select">
-              <option value="">Todas</option>
-              {INSTALACIONES_CON_MATERIAL.map((i) => (
-                <option key={i} value={i}>{i} · {NOMBRE_INSTALACION[i]}</option>
-              ))}
-            </select>
+            <MultiSelect name="inst" options={opInstalaciones} selected={inst.map(String)} placeholder="Todas" />
           </FiltroAuto>
         </div>
         <div style={{ overflowX: "auto" }}>

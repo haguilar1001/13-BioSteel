@@ -50,8 +50,8 @@ export default async function FacturadoPage({ searchParams }: { searchParams: Pr
           <div style={{ marginBottom: 10 }}>
             <div className="eyebrow" style={{ fontSize: 15 }}>Facturado Proveedor · {c.etiqueta}</div>
             <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3 }}>
-              Documentos CCP · {c.filtro.proveedor ?? "todos los proveedores"}
-              {c.filtro.instalacion ? " · el filtro de instalación no aplica aquí: el documento CCP es de cabecera y no trae bodega" : ""}
+              Documentos CCP · {c.filtro.proveedor?.length ? c.filtro.proveedor.join(", ") : "todos los proveedores"}
+              {c.filtro.instalacion?.length ? " · el filtro de instalación no aplica aquí: el documento CCP es de cabecera y no trae bodega" : ""}
             </div>
           </div>
           <BarraFiltros

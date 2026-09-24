@@ -11,6 +11,8 @@ import { requirePermiso } from "@/server/auth-context";
 import { formatNumero } from "@/lib/format";
 import { Monto } from "../../_components/Monto";
 import { FiltroAuto } from "../../_components/FiltroAuto";
+import { MultiSelect, type OpcionMulti } from "../../_components/MultiSelect";
+import { listaDe } from "../../_components/filtro-multi";
 import {
   aniosConMovimientos, mesesConMovimientos, bodegas, marcasConMovimientos,
   resumenMovimientos, movimientosPorTipo, movimientosPorBodegaFiltrado, detalleMovimientos,
@@ -41,16 +43,25 @@ export default async function MovimientosPage({
   const meses = await mesesConMovimientos(anio);
   const mes = sp.mes && meses.includes(Number(sp.mes)) ? Number(sp.mes) : undefined;
   const catalogo = await bodegas();
-  const bodega = sp.bodega && catalogo.some((b) => b.codigo === sp.bodega) ? sp.bodega : undefined;
-  const instalacion = sp.inst && NOMBRE_INSTALACION[Number(sp.inst)] ? Number(sp.inst) : undefined;
-  const tipoDoc = sp.tipo && /^[A-Z]{3}$/.test(sp.tipo) ? sp.tipo : undefined;
+  const bodegasValidas = new Set(catalogo.map((b) => b.codigo));
+  const bodega = listaDe(sp.bodega, bodegasValidas);
+  const instalacionesValidas = new Set(INSTALACIONES_CON_MATERIAL.map(String));
+  const instalacion = listaDe(sp.inst, instalacionesValidas).map(Number);
   const marcas = await marcasConMovimientos(anio);
-  const marca = sp.marca && marcas.includes(sp.marca) ? sp.marca : undefined;
+  const marcasValidas = new Set(marcas);
+  const marca = listaDe(sp.marca, marcasValidas);
 
-  const filtro: FiltroMovimientos = { anio, mes, bodega, instalacion, tipoDoc, marca };
+  const filtro: FiltroMovimientos = { anio, mes, bodega, instalacion, tipoDoc: [], marca };
+  // Opciones de tipo de documento: sin el propio filtro de tipo, para que
+  // elegir uno no le borre las demás opciones al selector (mismo criterio de Consumos).
+  const tiposOpciones = await movimientosPorTipo(filtro);
+  const tiposValidos = new Set(tiposOpciones.map((t) => t.tipoDoc));
+  const tipoDoc = listaDe(sp.tipo, tiposValidos);
+  filtro.tipoDoc = tipoDoc;
+
   const [kpi, tipos, porBodega, detalle, saldo] = await Promise.all([
     resumenMovimientos(filtro),
-    movimientosPorTipo(filtro),
+    tipoDoc.length ? movimientosPorTipo(filtro) : Promise.resolve(tiposOpciones),
     movimientosPorBodegaFiltrado(filtro),
     detalleMovimientos(filtro, LIMITE),
     saldoDelPeriodo(filtro),
@@ -67,12 +78,12 @@ export default async function MovimientosPage({
   const saldoBodega = new Map<string, number>();
   if (mesSaldo) {
     for (const b of await bodegasConSaldo(anio, mesSaldo)) {
-      if (instalacion && b.instalacion !== instalacion) continue;
+      if (instalacion.length && !instalacion.includes(b.instalacion)) continue;
       saldoBodega.set(b.codigo, b.valor);
     }
   }
 
-  const bodegaSel = bodega ? catalogo.find((b) => b.codigo === bodega) : undefined;
+  const bodegaSel = bodega.length === 1 ? catalogo.find((b) => b.codigo === bodega[0]) : undefined;
   const etiqueta = mes ? `${MES_LARGO[mes]} ${anio}` : `${anio}`;
   const neto = kpi.costoEntradas - kpi.costoSalidas;
 
@@ -92,13 +103,10 @@ export default async function MovimientosPage({
   const ultimoMov = meses[meses.length - 1] ?? 0;
   const saldoRezagado = saldo.disponible && saldo.mesFinal < ultimoMov;
 
-  // Bodegas agrupadas por ciudad, para que el selector sea navegable (80+).
-  const porCiudad = new Map<string, typeof catalogo>();
-  for (const b of catalogo) {
-    const c = b.ciudad || "Sin ciudad";
-    const g = porCiudad.get(c) ?? [];
-    g.push(b); porCiudad.set(c, g);
-  }
+  const opBodegas: OpcionMulti[] = catalogo.map((b) => ({ value: b.codigo, label: `${b.codigo} · ${b.descripcion}`, sub: b.ciudad || undefined }));
+  const opInstalaciones: OpcionMulti[] = INSTALACIONES_CON_MATERIAL.map((i) => ({ value: String(i), label: `${i} · ${NOMBRE_INSTALACION[i]}` }));
+  const opTipos: OpcionMulti[] = tiposOpciones.map((t) => ({ value: t.tipoDoc, label: `${t.tipoDoc} · ${t.descripcion}` }));
+  const opMarcas: OpcionMulti[] = marcas.map((m) => ({ value: m, label: m }));
 
   return (
     <>
@@ -109,10 +117,10 @@ export default async function MovimientosPage({
             <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3 }}>
               {bodegaSel
                 ? <>Bodega {bodegaSel.codigo} · {bodegaSel.descripcion} · {bodegaSel.ciudad || "sin ciudad"} · {bodegaSel.modeloCompra || "sin modelo"}</>
-                : "Todas las bodegas"}
-              {instalacion ? ` · instalación ${instalacion} · ${NOMBRE_INSTALACION[instalacion]}` : ""}
-              {tipoDoc ? ` · ${tipoDoc}` : ""}
-              {marca ? ` · ${marca}` : ""}
+                : bodega.length ? `${bodega.length} bodegas` : "Todas las bodegas"}
+              {instalacion.length ? ` · instalación ${instalacion.join(", ")}` : ""}
+              {tipoDoc.length ? ` · ${tipoDoc.join(", ")}` : ""}
+              {marca.length ? ` · ${marca.length === 1 ? marca[0] : `${marca.length} proveedores`}` : ""}
             </div>
           </div>
           <FiltroAuto className="toolbar">
@@ -126,29 +134,13 @@ export default async function MovimientosPage({
               {meses.map((m) => <option key={m} value={m}>{MES_LARGO[m]}</option>)}
             </select>
             <label className="flag" style={{ alignSelf: "center" }}>Bodega:</label>
-            <select name="bodega" defaultValue={bodega ?? ""} className="select" style={{ maxWidth: 300 }}>
-              <option value="">Todas</option>
-              {[...porCiudad.entries()].sort().map(([ciudad, lista]) => (
-                <optgroup key={ciudad} label={ciudad}>
-                  {lista.map((b) => <option key={b.codigo} value={b.codigo}>{b.codigo} · {b.descripcion}</option>)}
-                </optgroup>
-              ))}
-            </select>
+            <MultiSelect name="bodega" options={opBodegas} selected={bodega} placeholder="Todas" ancho={300} />
             <label className="flag" style={{ alignSelf: "center" }}>Instalación:</label>
-            <select name="inst" defaultValue={instalacion ?? ""} className="select">
-              <option value="">Todas</option>
-              {INSTALACIONES_CON_MATERIAL.map((i) => <option key={i} value={i}>{i} · {NOMBRE_INSTALACION[i]}</option>)}
-            </select>
+            <MultiSelect name="inst" options={opInstalaciones} selected={instalacion.map(String)} placeholder="Todas" />
             <label className="flag" style={{ alignSelf: "center" }}>Tipo:</label>
-            <select name="tipo" defaultValue={tipoDoc ?? ""} className="select" style={{ maxWidth: 260 }}>
-              <option value="">Todos</option>
-              {tipos.map((t) => <option key={t.tipoDoc} value={t.tipoDoc}>{t.tipoDoc} · {t.descripcion}</option>)}
-            </select>
+            <MultiSelect name="tipo" options={opTipos} selected={tipoDoc} placeholder="Todos" ancho={260} />
             <label className="flag" style={{ alignSelf: "center" }}>Proveedor (marca):</label>
-            <select name="marca" defaultValue={marca ?? ""} className="select" style={{ maxWidth: 300 }}>
-              <option value="">Todos</option>
-              {marcas.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
+            <MultiSelect name="marca" options={opMarcas} selected={marca} placeholder="Todos" ancho={300} />
           </FiltroAuto>
         </div>
       </div>
@@ -191,13 +183,13 @@ export default async function MovimientosPage({
           </div>
         </div>
       </div>
-      {(saldo.motivo || saldoRezagado || (saldo.disponible && tipoDoc)) && (
+      {(saldo.motivo || saldoRezagado || (saldo.disponible && tipoDoc.length > 0)) && (
         <div className="card" style={{ marginBottom: 12 }}>
           <div className="card-body" style={{ fontSize: 12, color: "var(--muted)", padding: "10px 14px", display: "grid", gap: 4 }}>
             {saldo.motivo === "bodega" && <div>Este periodo se cargó con el export viejo del balance, que solo llegaba hasta instalación: por eso no hay <b>saldo por bodega</b>. Vuelve a cargar el balance del mes con la columna Bodega y aparece.</div>}
             {saldo.motivo === "sin-balance" && <div>No hay <b>balance</b> cargado para este periodo, así que no hay saldo inicial ni final. Carga el balance del mes para verlos.</div>}
             {saldoRezagado && <div>El balance va hasta <b>{MES_LARGO[saldo.mesFinal]}</b> y los movimientos llegan a <b>{MES_LARGO[ultimoMov]}</b>: por eso inicial + entradas − salidas no da exactamente el saldo final.</div>}
-            {!saldo.motivo && tipoDoc && <div>El <b>saldo</b> es la existencia completa: no se filtra por tipo de documento. Entradas y salidas sí muestran solo <b>{tipoDoc}</b>.</div>}
+            {!saldo.motivo && tipoDoc.length > 0 && <div>El <b>saldo</b> es la existencia completa: no se filtra por tipo de documento. Entradas y salidas sí muestran solo <b>{tipoDoc.join(", ")}</b>.</div>}
           </div>
         </div>
       )}

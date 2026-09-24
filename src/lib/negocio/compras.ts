@@ -62,15 +62,15 @@ export interface FiltroCompras {
   mes?: number;
   /** 1–31. Solo tiene efecto junto con `mes`. */
   dia?: number;
-  proveedor?: string;
-  linea?: string;
-  tipoCompra?: string;
+  proveedor?: string[];
+  linea?: string[];
+  tipoCompra?: string[];
   /**
    * 101 propio · 102 consignación · 106 aprovechamiento. Ninguna fuente de
    * compras la trae: se deduce de la BODEGA con el catálogo InvBodega, el
    * mismo puente que usa Osteosíntesis.
    */
-  instalacion?: number;
+  instalacion?: number[];
 }
 
 // ---------- Fragmentos de WHERE ----------
@@ -86,38 +86,48 @@ function periodo(f: FiltroCompras, colFecha: string): Prisma.Sql {
 }
 
 /**
- * Proveedores del tipo de compra pedido. "SIN CLASIFICAR" = los que no están
- * en el catálogo, para que el filtro nunca esconda plata sin avisar.
+ * Proveedores del tipo (o tipos) de compra pedido. "SIN CLASIFICAR" = los que
+ * no están en el catálogo, para que el filtro nunca esconda plata sin avisar.
  */
 function porTipoCompra(f: FiltroCompras): Prisma.Sql {
-  if (!f.tipoCompra) return Prisma.empty;
-  if (f.tipoCompra === SIN_CLASIFICAR) {
-    return Prisma.sql` AND m."proveedor" NOT IN (SELECT "razonSocial" FROM "ProveedorCompra" WHERE "tipoCompra" <> '')`;
+  const tipos = f.tipoCompra ?? [];
+  if (!tipos.length) return Prisma.empty;
+  const normales = tipos.filter((t) => t !== SIN_CLASIFICAR);
+  const partes: Prisma.Sql[] = [];
+  if (normales.length) {
+    partes.push(Prisma.sql`m."proveedor" IN (SELECT "razonSocial" FROM "ProveedorCompra" WHERE "tipoCompra" IN (${Prisma.join(normales)}))`);
   }
-  return Prisma.sql` AND m."proveedor" IN (SELECT "razonSocial" FROM "ProveedorCompra" WHERE "tipoCompra" = ${f.tipoCompra})`;
+  if (tipos.includes(SIN_CLASIFICAR)) {
+    partes.push(Prisma.sql`m."proveedor" NOT IN (SELECT "razonSocial" FROM "ProveedorCompra" WHERE "tipoCompra" <> '')`);
+  }
+  return Prisma.sql` AND (${Prisma.join(partes, " OR ")})`;
 }
 
 const porProveedorSql = (f: FiltroCompras): Prisma.Sql =>
-  f.proveedor ? Prisma.sql` AND m."proveedor" = ${f.proveedor}` : Prisma.empty;
+  f.proveedor && f.proveedor.length ? Prisma.sql` AND m."proveedor" IN (${Prisma.join(f.proveedor)})` : Prisma.empty;
 
 const porLineaSql = (f: FiltroCompras): Prisma.Sql =>
-  f.linea ? Prisma.sql` AND m."linea" = ${f.linea}` : Prisma.empty;
+  f.linea && f.linea.length ? Prisma.sql` AND m."linea" IN (${Prisma.join(f.linea)})` : Prisma.empty;
 
 /**
  * Instalación de las órdenes y los pendientes: la del catálogo de bodegas.
  * Una bodega sin catalogar no pertenece a ninguna instalación, así que queda
  * FUERA del filtro en vez de colarse en la que no es.
  */
-const porInstalacionSql = (f: FiltroCompras): Prisma.Sql =>
-  f.instalacion && NOMBRE_INSTALACION[f.instalacion]
-    ? Prisma.sql` AND m."bodegaCodigo" IN (SELECT "codigo" FROM "InvBodega" WHERE "instalacion" = ${f.instalacion})`
+const porInstalacionSql = (f: FiltroCompras): Prisma.Sql => {
+  const validas = (f.instalacion ?? []).filter((i) => NOMBRE_INSTALACION[i]);
+  return validas.length
+    ? Prisma.sql` AND m."bodegaCodigo" IN (SELECT "codigo" FROM "InvBodega" WHERE "instalacion" IN (${Prisma.join(validas)}))`
     : Prisma.empty;
+};
 
 /** Igual, pero el movimiento de inventario sí declara su propia instalación. */
-const porInstalacionMovSql = (f: FiltroCompras): Prisma.Sql =>
-  f.instalacion && NOMBRE_INSTALACION[f.instalacion]
-    ? Prisma.sql` AND COALESCE(m."instalacion", (SELECT b."instalacion" FROM "InvBodega" b WHERE b."codigo" = m."bodegaCodigo")) = ${f.instalacion}`
+const porInstalacionMovSql = (f: FiltroCompras): Prisma.Sql => {
+  const validas = (f.instalacion ?? []).filter((i) => NOMBRE_INSTALACION[i]);
+  return validas.length
+    ? Prisma.sql` AND COALESCE(m."instalacion", (SELECT b."instalacion" FROM "InvBodega" b WHERE b."codigo" = m."bodegaCodigo")) IN (${Prisma.join(validas)})`
     : Prisma.empty;
+};
 
 /** WHERE de órdenes y pendientes (tienen proveedor y línea). */
 function whereOrdenes(f: FiltroCompras): Prisma.Sql {
@@ -138,10 +148,10 @@ function whereEntradas(f: FiltroCompras): Prisma.Sql {
 /** Filtros que una fuente no puede aplicar tal cual (para avisarlo en pantalla). */
 export function filtrosIgnorados(f: FiltroCompras): { facturas: string[] } {
   const facturas: string[] = [];
-  if (f.linea) facturas.push("línea");
+  if (f.linea?.length) facturas.push("línea");
   // El documento CCP es de cabecera: no trae bodega, así que tampoco hay
   // instalación que mirar.
-  if (f.instalacion) facturas.push("instalación");
+  if (f.instalacion?.length) facturas.push("instalación");
   return { facturas };
 }
 
@@ -447,7 +457,7 @@ export async function entradasPorProveedor(f: FiltroCompras): Promise<EntradasAt
  * `estimado` es lo que la pantalla usa para no presentarla como exacta.
  */
 async function entradasDelFiltro(f: FiltroCompras): Promise<{ valor: number; unidades: number; estimado: boolean }> {
-  if (!f.proveedor && !f.tipoCompra) {
+  if (!f.proveedor?.length && !f.tipoCompra?.length) {
     const r = await prisma.$queryRaw<{ valor: unknown; unidades: unknown }[]>`
       SELECT COALESCE(SUM(m."costoEntradas"), 0) AS valor, COALESCE(SUM(m."cantEntradas"), 0) AS unidades
       FROM "InvMovimiento" m WHERE ${whereEntradas(f)}`;
@@ -456,17 +466,17 @@ async function entradasDelFiltro(f: FiltroCompras): Promise<{ valor: number; uni
 
   const { porProveedor } = await entradasPorProveedor(f);
   let tipos: Map<string, string> | undefined;
-  if (f.tipoCompra) {
+  if (f.tipoCompra?.length) {
     const cat = await prisma.proveedorCompra.findMany({ select: { razonSocial: true, tipoCompra: true } });
     tipos = new Map(cat.map((t) => [t.razonSocial, t.tipoCompra]));
   }
 
   let valor = 0, unidades = 0, estimado = false;
   for (const [proveedor, e] of porProveedor) {
-    if (f.proveedor && proveedor !== f.proveedor) continue;
-    if (f.tipoCompra) {
+    if (f.proveedor?.length && !f.proveedor.includes(proveedor)) continue;
+    if (f.tipoCompra?.length) {
       const t = tipos?.get(proveedor) ?? "";
-      const coincide = f.tipoCompra === SIN_CLASIFICAR ? t === "" : t === f.tipoCompra;
+      const coincide = f.tipoCompra.some((tc) => (tc === SIN_CLASIFICAR ? t === "" : t === tc));
       if (!coincide) continue;
     }
     valor += e.valor; unidades += e.unidades;
@@ -516,11 +526,11 @@ export async function comprasPorProveedor(f: FiltroCompras): Promise<TablaProvee
   for (const r of pen) fila(r.proveedor).pendiente = n(r.valor);
   for (const r of fac) fila(r.proveedor).facturado = n(r.valor);
 
-  // Con filtro de proveedor la tabla solo muestra ese proveedor: lo que se le
-  // atribuya a los demás no cabe en la tabla y se contaría de más en el total.
-  const entradasSinIdentificar = f.proveedor ? 0 : entradas.sinIdentificar;
+  // Con filtro de proveedor la tabla solo muestra esos proveedores: lo que se
+  // les atribuya a los demás no cabe en la tabla y se contaría de más en el total.
+  const entradasSinIdentificar = f.proveedor?.length ? 0 : entradas.sinIdentificar;
   for (const [proveedor, e] of entradas.porProveedor) {
-    if (f.proveedor && proveedor !== f.proveedor) continue;
+    if (f.proveedor?.length && !f.proveedor.includes(proveedor)) continue;
     fila(proveedor).entradas = e.valor;
   }
 
@@ -659,11 +669,11 @@ export async function comprasPorTipoCompra(f: FiltroCompras): Promise<FilaTipoCo
   for (const r of ord) fila(r.tipo).ordenes += n(r.valor);
   for (const r of fac) fila(r.tipo).facturado += n(r.valor);
   for (const [proveedor, e] of entradas.porProveedor) {
-    if (f.proveedor && proveedor !== f.proveedor) continue;
+    if (f.proveedor?.length && !f.proveedor.includes(proveedor)) continue;
     fila(tipoDe.get(proveedor) ?? SIN_CLASIFICAR).entradas += e.valor;
   }
   // Las entradas sin marca reconocible no tienen proveedor y por tanto tampoco tipo.
-  if (!f.proveedor && entradas.sinIdentificar) fila(SIN_CLASIFICAR).entradas += entradas.sinIdentificar;
+  if (!f.proveedor?.length && entradas.sinIdentificar) fila(SIN_CLASIFICAR).entradas += entradas.sinIdentificar;
 
   return [...out.values()].sort((a, b) => b.ordenes - a.ordenes);
 }

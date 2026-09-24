@@ -41,12 +41,16 @@ export const MES_CORTO = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun",
 
 const n = (v: unknown): number => (v == null ? 0 : Number(v));
 
-/** Instalación por la que se filtra una vista; undefined = todas. */
-export type FiltroInstalacion = number | undefined;
+/** Literal de texto escapado para interpolarlo en SQL. */
+const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`;
 
-/** Fragmento SQL para acotar por instalación (se interpola un número validado). */
-function soloInst(inst: FiltroInstalacion, col = "instalacion"): string {
-  return inst && NOMBRE_INSTALACION[inst] ? ` AND ${col} = ${inst}` : "";
+/** Instalaciones por las que se filtra una vista; vacío/undefined = todas. */
+export type FiltroInstalacion = number[] | undefined;
+
+/** Fragmento SQL para acotar por una o más instalaciones (números validados contra el catálogo). */
+function soloInst(insts: FiltroInstalacion, col = "instalacion"): string {
+  const validas = (insts ?? []).filter((i) => NOMBRE_INSTALACION[i]);
+  return validas.length ? ` AND ${col} IN (${validas.join(",")})` : "";
 }
 
 /**
@@ -54,8 +58,8 @@ function soloInst(inst: FiltroInstalacion, col = "instalacion"): string {
  * el export nuevo; los viejos tienen bodegaCodigo = "" (ver `mesesConBodega`).
  */
 export interface FiltroSaldo {
-  inst?: number;
-  bodega?: string;
+  inst?: number[];
+  bodega?: string[];
 }
 
 /** Fragmento SQL para acotar el balance por instalación y bodega. */
@@ -63,7 +67,7 @@ function soloSaldo(f: FiltroSaldo | undefined, pre = ""): string {
   if (!f) return "";
   const p = pre ? `${pre}.` : "";
   let s = soloInst(f.inst, `${p}instalacion`);
-  if (f.bodega) s += ` AND ${p}"bodegaCodigo" = '${f.bodega.replace(/'/g, "''")}'`;
+  if (f.bodega && f.bodega.length) s += ` AND ${p}"bodegaCodigo" IN (${f.bodega.map(lit).join(",")})`;
   return s;
 }
 
@@ -505,28 +509,29 @@ export async function bodegas(): Promise<OpcionBodega[]> {
 
 export interface FiltroMovimientos {
   anio: number; mes?: number;
-  bodega?: string; instalacion?: number; tipoDoc?: string;
+  bodega?: string[]; instalacion?: number[]; tipoDoc?: string[];
   /**
    * Columna MARCA del export ("1003 - SAMPEDRO"). En SIESA la marca ES la casa
    * comercial que nos vende, así que este mismo campo es el proveedor: es el
    * mismo string que usa el Informe de Consumos.
    */
-  marca?: string;
+  marca?: string[];
 }
-
-/** Literal de texto escapado para interpolarlo en SQL. */
-const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`;
 
 /** Cláusula WHERE compartida por las consultas de movimientos. */
 function whereMov(f: FiltroMovimientos): string {
   const p: string[] = [`m.anio = ${f.anio}`];
   if (f.mes) p.push(`m.mes = ${f.mes}`);
-  if (f.bodega) p.push(`m."bodegaCodigo" = ${lit(f.bodega)}`);
-  if (f.instalacion && NOMBRE_INSTALACION[f.instalacion]) {
-    p.push(`COALESCE(m.instalacion, b.instalacion) = ${f.instalacion}`);
+  if (f.bodega && f.bodega.length) p.push(`m."bodegaCodigo" IN (${f.bodega.map(lit).join(",")})`);
+  if (f.instalacion && f.instalacion.length) {
+    const validas = f.instalacion.filter((i) => NOMBRE_INSTALACION[i]);
+    if (validas.length) p.push(`COALESCE(m.instalacion, b.instalacion) IN (${validas.join(",")})`);
   }
-  if (f.tipoDoc && /^[A-Z]{3}$/.test(f.tipoDoc)) p.push(`m."tipoDoc" = '${f.tipoDoc}'`);
-  if (f.marca) p.push(`m.marca = ${lit(f.marca)}`);
+  if (f.tipoDoc && f.tipoDoc.length) {
+    const validos = f.tipoDoc.filter((t) => /^[A-Z]{3}$/.test(t));
+    if (validos.length) p.push(`m."tipoDoc" IN (${validos.map(lit).join(",")})`);
+  }
+  if (f.marca && f.marca.length) p.push(`m.marca IN (${f.marca.map(lit).join(",")})`);
   return p.join(" AND ");
 }
 
@@ -555,9 +560,12 @@ export async function saldoDelPeriodo(f: FiltroMovimientos): Promise<SaldoPeriod
 
   const cond: string[] = [`anio = ${f.anio}`];
   if (f.mes) cond.push(`mes = ${f.mes}`);
-  if (f.instalacion && NOMBRE_INSTALACION[f.instalacion]) cond.push(`instalacion = ${f.instalacion}`);
-  if (f.marca) cond.push(`marca = ${lit(f.marca)}`);
-  if (f.bodega) cond.push(`"bodegaCodigo" = ${lit(f.bodega)}`);
+  if (f.instalacion && f.instalacion.length) {
+    const validas = f.instalacion.filter((i) => NOMBRE_INSTALACION[i]);
+    if (validas.length) cond.push(`instalacion IN (${validas.join(",")})`);
+  }
+  if (f.marca && f.marca.length) cond.push(`marca IN (${f.marca.map(lit).join(",")})`);
+  if (f.bodega && f.bodega.length) cond.push(`"bodegaCodigo" IN (${f.bodega.map(lit).join(",")})`);
   const w = cond.join(" AND ");
 
   // El rango es el que alcanza el balance dentro del filtro: si se pide "todo
@@ -572,7 +580,7 @@ export async function saldoDelPeriodo(f: FiltroMovimientos): Promise<SaldoPeriod
   const r = filas[0];
   // Sin filas con bodega el mes puede existir igual, cargado con el export
   // viejo: hay que distinguirlo de "no hay balance del todo".
-  if (!r || r.ini == null) return { ...vacio, motivo: f.bodega ? "bodega" : "sin-balance" };
+  if (!r || r.ini == null) return { ...vacio, motivo: f.bodega && f.bodega.length ? "bodega" : "sin-balance" };
   return {
     disponible: true, inicial: n(r.v_ini), final: n(r.v_fin),
     mesInicial: n(r.ini), mesFinal: n(r.fin),

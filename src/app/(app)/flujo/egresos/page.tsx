@@ -10,6 +10,8 @@ import { listarMovimientos, movimientosPorTercero, listarCategorias, categoriasP
 import { SelectorCategoria } from "../SelectorCategoria";
 import { BotonImprimir } from "../../_components/BotonImprimir";
 import { FiltroAuto } from "../../_components/FiltroAuto";
+import { MultiSelect, type OpcionMulti } from "../../_components/MultiSelect";
+import { listaDe } from "../../_components/filtro-multi";
 
 const ANIO = 2026;
 const DEF_DIR: Record<string, DirOrden> = { fecha: "desc", grupo: "asc", tercero: "asc", detalle: "asc", observacion: "asc", valor: "desc", cantidad: "desc" };
@@ -23,11 +25,12 @@ export default async function EgresosPage({
   const puedeGestionar = await puede(usuario, "flujo.manage");
   const sp = await searchParams;
   const mes = sp.mes && /^\d+$/.test(sp.mes) ? Number(sp.mes) : undefined;
-  const categoriaId = sp.grupo && /^\d+$/.test(sp.grupo) ? Number(sp.grupo) : undefined;
   const q = sp.q;
   const vista = sp.vista === "detalle" ? "detalle" : "proveedor";
   const categorias = await listarCategorias();
   const catsEdit = puedeGestionar ? await categoriasPorTipo("egreso") : [];
+  const categoriaId = listaDe(sp.grupo, new Set(categorias.map((c) => String(c.id)))).map(Number);
+  const opCategorias: OpcionMulti[] = categorias.map((c) => ({ value: String(c.id), label: c.nombre }));
 
   const campos = vista === "proveedor" ? ["tercero", "cantidad", "valor"] : ["fecha", "grupo", "tercero", "detalle", "observacion", "valor"];
   const campoDefault = vista === "proveedor" ? "valor" : "fecha";
@@ -37,7 +40,7 @@ export default async function EgresosPage({
   const base = (over: { vista?: string; orden?: string; dir?: string } = {}) => {
     const p = new URLSearchParams();
     if (mes) p.set("mes", String(mes));
-    if (categoriaId) p.set("grupo", String(categoriaId));
+    if (categoriaId.length) p.set("grupo", categoriaId.join(","));
     if (q) p.set("q", q);
     const v = over.vista ?? vista;
     if (v === "proveedor") p.set("vista", "proveedor");
@@ -70,14 +73,11 @@ export default async function EgresosPage({
           <option key={m} value={m}>{MESES_LABEL[m]}</option>
         ))}
       </select>
-      <select name="grupo" defaultValue={categoriaId ?? ""} className="select">
-        <option value="">Todos los grupos</option>
-        {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-      </select>
+      <MultiSelect name="grupo" options={opCategorias} selected={categoriaId.map(String)} placeholder="Todos los grupos" />
       <input type="search" name="q" defaultValue={q ?? ""} placeholder="Tercero, NIT, observación…" className="select" style={{ minWidth: 200 }} />
       <button type="submit" className="btn primary">Filtrar</button>
       <a href={base()} className="btn">Limpiar</a>
-      <a href={`/flujo/export?tipo=egreso&anio=${ANIO}${mes ? `&mes=${mes}` : ""}${categoriaId ? `&grupo=${categoriaId}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}`} className="btn" title="Descargar en Excel el listado filtrado">⬇️ Excel</a>
+      <a href={`/flujo/export?tipo=egreso&anio=${ANIO}${mes ? `&mes=${mes}` : ""}${categoriaId.length ? `&grupo=${categoriaId.join(",")}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}`} className="btn" title="Descargar en Excel el listado filtrado">⬇️ Excel</a>
       <BotonImprimir />
       <span style={{ flex: 1 }} />
       <a href={base({ vista: "detalle" })} className={`btn${vista === "detalle" ? " primary" : ""}`}>Detalle</a>

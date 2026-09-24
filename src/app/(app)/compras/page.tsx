@@ -50,10 +50,10 @@ export default async function ComprasPage({ searchParams }: { searchParams: Prom
   ]);
 
   const ignorados = filtrosIgnorados(f);
-  const instalacionActiva = c.instalaciones.find((i) => i.valor === f.instalacion);
+  const instalacionesActivas = c.instalaciones.filter((i) => f.instalacion?.includes(i.valor));
   // Al filtrar por instalación, lo que no tiene bodega catalogada se cae de
   // los cuatro KPI. Se cuenta aparte para poder decirlo.
-  const fuera = f.instalacion ? await comprasSinInstalacion(f) : null;
+  const fuera = f.instalacion?.length ? await comprasSinInstalacion(f) : null;
 
   // Antigüedad de la foto de pendientes. Es una FOTO: si no se vuelve a subir
   // el archivo, el KPI se queda quieto y parece un dato al día. Pasó en
@@ -107,10 +107,10 @@ export default async function ComprasPage({ searchParams }: { searchParams: Prom
           <div style={{ marginBottom: 10 }}>
             <div className="eyebrow" style={{ fontSize: 15 }}>Informe de Compras · {c.etiqueta}</div>
             <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3 }}>
-              {f.proveedor ?? "Todos los proveedores"}
-              {f.linea ? ` · ${f.linea}` : ""}
-              {f.tipoCompra ? ` · ${f.tipoCompra}` : ""}
-              {instalacionActiva ? ` · instalación ${instalacionActiva.label}` : ""}
+              {f.proveedor?.length ? f.proveedor.join(", ") : "Todos los proveedores"}
+              {f.linea?.length ? ` · ${f.linea.join(", ")}` : ""}
+              {f.tipoCompra?.length ? ` · ${f.tipoCompra.join(", ")}` : ""}
+              {instalacionesActivas.length ? ` · instalación ${instalacionesActivas.map((i) => i.label).join(", ")}` : ""}
               {corte ? ` · pendientes al ${formatFechaSello(corte)}` : ""}
             </div>
           </div>

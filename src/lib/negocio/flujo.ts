@@ -74,7 +74,7 @@ export interface FilaMovimiento {
 export interface FiltrosMov {
   anio: number;
   mes?: number;
-  categoriaId?: number;
+  categoriaId?: number[];
   q?: string;
 }
 
@@ -84,7 +84,7 @@ function whereMov(tipo: TipoMovimiento, f: FiltrosMov): Prisma.MovimientoFlujoWh
     tipo,
     anio: f.anio,
     ...(f.mes ? { mes: f.mes } : {}),
-    ...(f.categoriaId ? { categoriaId: f.categoriaId } : {}),
+    ...(f.categoriaId?.length ? { categoriaId: { in: f.categoriaId } } : {}),
     ...(q
       ? {
           OR: [

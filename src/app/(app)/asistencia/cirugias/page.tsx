@@ -6,6 +6,8 @@
 import { requirePermiso } from "@/server/auth-context";
 import { formatNumero } from "@/lib/format";
 import { FiltroAuto } from "../../_components/FiltroAuto";
+import { MultiSelect, type OpcionMulti } from "../../_components/MultiSelect";
+import { listaDe } from "../../_components/filtro-multi";
 import { LineasMensuales } from "../../_components/charts/LineasMensuales";
 import {
   aniosConCirugias, mesesConCirugias, diasConCirugias, catalogosCx,
@@ -59,9 +61,9 @@ export default async function CirugiasPage({
   const dia = mes && sp.dia && diasDisp.includes(Number(sp.dia)) ? Number(sp.dia) : undefined;
 
   const cat = await catalogosCx(anio);
-  const ciudad = sp.ciudad && cat.ciudades.includes(sp.ciudad) ? sp.ciudad : undefined;
-  const grupo = sp.grupo && cat.grupos.includes(sp.grupo) ? sp.grupo : undefined;
-  const asesor = sp.asesor && cat.asesores.includes(sp.asesor) ? sp.asesor : undefined;
+  const ciudad = listaDe(sp.ciudad, new Set(cat.ciudades));
+  const grupo = listaDe(sp.grupo, new Set(cat.grupos));
+  const asesor = listaDe(sp.asesor, new Set(cat.asesores));
   const f: FiltroCx = { anio, mes, dia, ciudad, grupo, asesor };
 
   const [resumen, porMes, porAsesor, promAsesor, porIps, porCiudad, porGrupo, porMedico] = await Promise.all([
@@ -71,6 +73,9 @@ export default async function CirugiasPage({
 
   const etiqueta = mes ? `${dia ? `${dia} de ` : ""}${MES_LARGO[mes]} ${anio}` : `${anio}`;
   const cobColor = resumen.coberturaPct >= 0.7 ? "var(--ok)" : resumen.coberturaPct >= 0.5 ? "var(--w1)" : "var(--bad)";
+  const opCiudades: OpcionMulti[] = cat.ciudades.map((c) => ({ value: c, label: c }));
+  const opGrupos: OpcionMulti[] = cat.grupos.map((g) => ({ value: g, label: g }));
+  const opAsesores: OpcionMulti[] = cat.asesores.map((a) => ({ value: a, label: a }));
 
   return (
     <>
@@ -99,21 +104,12 @@ export default async function CirugiasPage({
               {diasDisp.map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
             <label className="flag" style={{ alignSelf: "center" }}>Ciudad:</label>
-            <select name="ciudad" defaultValue={ciudad ?? ""} className="select">
-              <option value="">Todas</option>
-              {cat.ciudades.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
+            <MultiSelect name="ciudad" options={opCiudades} selected={ciudad} placeholder="Todas" />
             <label className="flag" style={{ alignSelf: "center" }}>Grupo:</label>
-            <select name="grupo" defaultValue={grupo ?? ""} className="select">
-              <option value="">Todos</option>
-              {cat.grupos.map((g) => <option key={g} value={g}>{g}</option>)}
-            </select>
+            <MultiSelect name="grupo" options={opGrupos} selected={grupo} placeholder="Todos" />
             <label className="flag" style={{ alignSelf: "center" }}>Asesor:</label>
-            <select name="asesor" defaultValue={asesor ?? ""} className="select" style={{ maxWidth: 220 }}>
-              <option value="">Todos</option>
-              {cat.asesores.map((a) => <option key={a} value={a}>{a}</option>)}
-            </select>
-            {(mes || ciudad || grupo || asesor)
+            <MultiSelect name="asesor" options={opAsesores} selected={asesor} placeholder="Todos" ancho={220} />
+            {(mes || ciudad.length || grupo.length || asesor.length)
               ? <a href={`/asistencia/cirugias?anio=${anio}`} className="btn">Limpiar</a>
               : null}
           </FiltroAuto>

@@ -12,6 +12,7 @@ import {
 } from "@/lib/negocio/reposicion";
 import { proveedoresConPedidos, marcasConPedidos, lineasConPedidos, ciudadesConPedidos } from "@/lib/negocio/pedidos";
 import { INSTALACIONES_CON_MATERIAL } from "@/lib/negocio/inventario-osteo";
+import { listaDe } from "../../_components/filtro-multi";
 
 export interface ParamsSugerencias {
   prov?: string; marca?: string; linea?: string; ciudad?: string;
@@ -50,7 +51,7 @@ export interface ContextoSugerencias {
   visibles: FilaReposicion[];
   parametros: ParametrosReposicion;
   filtro: FiltroReposicion;
-  estado?: EstadoRepo;
+  estados: EstadoRepo[];
   soloAComprar: boolean;
   /** true si el modelo vigente es el de defecto y el usuario no lo eligió. */
   modeloPorDefecto: boolean;
@@ -98,34 +99,34 @@ export async function resolverSugerencias(sp: ParamsSugerencias): Promise<Contex
     : sp.modelo && modelos.includes(sp.modelo) ? sp.modelo : undefined;
 
   const filtro: FiltroReposicion = {
-    proveedor: sp.prov && proveedores.includes(sp.prov) ? sp.prov : undefined,
-    marca: sp.marca && marcas.includes(sp.marca) ? sp.marca : undefined,
-    linea: sp.linea && lineas.includes(sp.linea) ? sp.linea : undefined,
-    ciudad: sp.ciudad && ciudades.includes(sp.ciudad) ? sp.ciudad : undefined,
+    proveedor: listaDe(sp.prov, new Set(proveedores)),
+    marca: listaDe(sp.marca, new Set(marcas)),
+    linea: listaDe(sp.linea, new Set(lineas)),
+    ciudad: listaDe(sp.ciudad, new Set(ciudades)),
     modeloCompra,
     instalacion: (INSTALACIONES_CON_MATERIAL as readonly number[]).includes(Number(sp.inst)) ? Number(sp.inst) : undefined,
   };
 
   const resultado = await calcularReposicion(hasta, parametros, filtro);
 
-  const estado = ESTADOS.includes(sp.estado as EstadoRepo) ? (sp.estado as EstadoRepo) : undefined;
+  const estados = listaDe(sp.estado, new Set(ESTADOS)) as EstadoRepo[];
   const soloAComprar = sp.todo !== "1";
   const visibles = resultado.filas
-    .filter((f) => (estado ? f.estado === estado : true))
-    .filter((f) => (soloAComprar && !estado ? f.sugerido > 0 : true))
+    .filter((f) => (estados.length ? estados.includes(f.estado) : true))
+    .filter((f) => (soloAComprar && !estados.length ? f.sugerido > 0 : true))
     .sort((a, b) => ORDEN_ESTADO[a.estado] - ORDEN_ESTADO[b.estado] || b.valorSugerido - a.valorSugerido);
 
   const qs = new URLSearchParams();
-  if (filtro.proveedor) qs.set("prov", filtro.proveedor);
-  if (filtro.marca) qs.set("marca", filtro.marca);
-  if (filtro.linea) qs.set("linea", filtro.linea);
-  if (filtro.ciudad) qs.set("ciudad", filtro.ciudad);
+  if (filtro.proveedor?.length) qs.set("prov", filtro.proveedor.join(","));
+  if (filtro.marca?.length) qs.set("marca", filtro.marca.join(","));
+  if (filtro.linea?.length) qs.set("linea", filtro.linea.join(","));
+  if (filtro.ciudad?.length) qs.set("ciudad", filtro.ciudad.join(","));
   // El modelo va SIEMPRE, incluso vacío: si no, el enlace de exportación y
   // cualquier vuelta a la pantalla reactivarían el defecto y el Excel no
   // coincidiría con lo que se está viendo.
   qs.set("modelo", filtro.modeloCompra ?? "");
   if (filtro.instalacion) qs.set("inst", String(filtro.instalacion));
-  if (estado) qs.set("estado", estado);
+  if (estados.length) qs.set("estado", estados.join(","));
   if (!soloAComprar) qs.set("todo", "1");
   qs.set("ventana", String(parametros.ventanaMeses));
   qs.set("lead", String(parametros.leadTimeMeses));
@@ -133,7 +134,7 @@ export async function resolverSugerencias(sp: ParamsSugerencias): Promise<Contex
   qs.set("cob", String(parametros.coberturaMeses));
 
   return {
-    resultado, visibles, parametros, filtro, estado, soloAComprar, modeloPorDefecto,
+    resultado, visibles, parametros, filtro, estados, soloAComprar, modeloPorDefecto,
     opciones: { proveedores, marcas, lineas, ciudades, modelos },
     query: qs.toString(),
   };

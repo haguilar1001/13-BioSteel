@@ -4,10 +4,15 @@
 // arrastrar JSX.
 import { MES_LARGO } from "@/lib/negocio/compras";
 import { FiltroAuto } from "../_components/FiltroAuto";
+import { MultiSelect, type OpcionMulti } from "../_components/MultiSelect";
 import type { ContextoFiltro } from "./_filtro";
 
 export function BarraFiltros({ c, extra }: { c: ContextoFiltro; extra?: React.ReactNode }) {
   const f = c.filtro;
+  const opProveedores: OpcionMulti[] = c.proveedores.map((p) => ({ value: p, label: p }));
+  const opLineas: OpcionMulti[] = c.lineas.map((l) => ({ value: l, label: l }));
+  const opTipos: OpcionMulti[] = c.tipos.map((t) => ({ value: t, label: t }));
+  const opInstalaciones: OpcionMulti[] = c.instalaciones.map((i) => ({ value: String(i.valor), label: i.label }));
   return (
     <FiltroAuto className="toolbar">
       <label className="flag" style={{ alignSelf: "center" }}>Año:</label>
@@ -33,26 +38,17 @@ export function BarraFiltros({ c, extra }: { c: ContextoFiltro; extra?: React.Re
       ) : null}
 
       <label className="flag" style={{ alignSelf: "center" }}>Proveedor:</label>
-      <select name="prov" defaultValue={f.proveedor ?? ""} className="select" style={{ maxWidth: 260 }}>
-        <option value="">Todos</option>
-        {c.proveedores.map((p) => <option key={p} value={p}>{p}</option>)}
-      </select>
+      <MultiSelect name="prov" options={opProveedores} selected={f.proveedor ?? []} placeholder="Todos" ancho={260} />
 
       <label className="flag" style={{ alignSelf: "center" }}>Línea:</label>
-      <select name="linea" defaultValue={f.linea ?? ""} className="select" style={{ maxWidth: 220 }}>
-        <option value="">Todas</option>
-        {c.lineas.map((l) => <option key={l} value={l}>{l}</option>)}
-      </select>
+      <MultiSelect name="linea" options={opLineas} selected={f.linea ?? []} placeholder="Todas" ancho={220} />
 
       {/* El tipo de compra depende del catálogo de proveedores: si no está
           cargado, el selector se oculta en vez de ofrecer una lista vacía. */}
       {c.tipos.length ? (
         <>
           <label className="flag" style={{ alignSelf: "center" }}>Tipo:</label>
-          <select name="tipo" defaultValue={f.tipoCompra ?? ""} className="select" style={{ maxWidth: 200 }}>
-            <option value="">Todos</option>
-            {c.tipos.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
+          <MultiSelect name="tipo" options={opTipos} selected={f.tipoCompra ?? []} placeholder="Todos" ancho={200} />
         </>
       ) : null}
 
@@ -61,10 +57,7 @@ export function BarraFiltros({ c, extra }: { c: ContextoFiltro; extra?: React.Re
       {c.instalaciones.length ? (
         <>
           <label className="flag" style={{ alignSelf: "center" }}>Instalación:</label>
-          <select name="inst" defaultValue={f.instalacion ?? ""} className="select" style={{ maxWidth: 200 }}>
-            <option value="">Todas</option>
-            {c.instalaciones.map((i) => <option key={i.valor} value={i.valor}>{i.label}</option>)}
-          </select>
+          <MultiSelect name="inst" options={opInstalaciones} selected={(f.instalacion ?? []).map(String)} placeholder="Todas" ancho={200} />
         </>
       ) : null}
 

@@ -17,6 +17,7 @@ import { requirePermiso } from "@/server/auth-context";
 import { formatNumero, formatFecha } from "@/lib/format";
 import { Monto } from "../../_components/Monto";
 import { FiltroAuto } from "../../_components/FiltroAuto";
+import { MultiSelect, type OpcionMulti } from "../../_components/MultiSelect";
 import {
   sugerenciaPorProveedor, sugerenciaPorModelo, SIN_MODELO,
   type EstadoRepo, type FilaReposicion,
@@ -94,6 +95,11 @@ export default async function SugerenciasPage({ searchParams }: { searchParams: 
   const verTodos = new URLSearchParams(c.query);
   verTodos.set("modelo", "");
 
+  const opProveedores: OpcionMulti[] = c.opciones.proveedores.map((x) => ({ value: x, label: x }));
+  const opLineas: OpcionMulti[] = c.opciones.lineas.map((x) => ({ value: x, label: x }));
+  const opCiudades: OpcionMulti[] = c.opciones.ciudades.map((x) => ({ value: x, label: x }));
+  const opEstados: OpcionMulti[] = ESTADOS.map((e) => ({ value: e, label: e }));
+
   return (
     <>
       {/* ---------- Parámetros ---------- */}
@@ -108,7 +114,7 @@ export default async function SugerenciasPage({ searchParams }: { searchParams: 
               ({meses(p.leadTimeMeses)} de lead time + {meses(p.seguridadMeses)} de seguridad
               + {meses(p.coberturaMeses)} de cobertura)
               {filtro.modeloCompra ? ` · solo ${filtro.modeloCompra}` : ""}
-              {filtro.proveedor ? ` · ${filtro.proveedor}` : ""}
+              {filtro.proveedor?.length ? ` · ${filtro.proveedor.join(", ")}` : ""}
             </div>
           </div>
 
@@ -140,28 +146,16 @@ export default async function SugerenciasPage({ searchParams }: { searchParams: 
             </select>
 
             <label className="flag" style={{ alignSelf: "center" }}>Proveedor:</label>
-            <select name="prov" defaultValue={filtro.proveedor ?? ""} className="select" style={{ maxWidth: 260 }}>
-              <option value="">Todos</option>
-              {c.opciones.proveedores.map((x) => <option key={x} value={x}>{x}</option>)}
-            </select>
+            <MultiSelect name="prov" options={opProveedores} selected={filtro.proveedor ?? []} placeholder="Todos" ancho={260} />
 
             <label className="flag" style={{ alignSelf: "center" }}>Línea:</label>
-            <select name="linea" defaultValue={filtro.linea ?? ""} className="select" style={{ maxWidth: 200 }}>
-              <option value="">Todas</option>
-              {c.opciones.lineas.map((x) => <option key={x} value={x}>{x}</option>)}
-            </select>
+            <MultiSelect name="linea" options={opLineas} selected={filtro.linea ?? []} placeholder="Todas" ancho={200} />
 
             <label className="flag" style={{ alignSelf: "center" }}>Ciudad:</label>
-            <select name="ciudad" defaultValue={filtro.ciudad ?? ""} className="select" style={{ maxWidth: 170 }}>
-              <option value="">Todas</option>
-              {c.opciones.ciudades.map((x) => <option key={x} value={x}>{x}</option>)}
-            </select>
+            <MultiSelect name="ciudad" options={opCiudades} selected={filtro.ciudad ?? []} placeholder="Todas" ancho={170} />
 
             <label className="flag" style={{ alignSelf: "center" }}>Estado:</label>
-            <select name="estado" defaultValue={c.estado ?? ""} className="select" style={{ maxWidth: 150 }}>
-              <option value="">A comprar</option>
-              {ESTADOS.map((e) => <option key={e} value={e}>{e}</option>)}
-            </select>
+            <MultiSelect name="estado" options={opEstados} selected={c.estados} placeholder="A comprar" ancho={150} />
 
             <label className="flag" style={{ alignSelf: "center", display: "inline-flex", alignItems: "center", gap: 6 }}>
               <input type="checkbox" name="todo" value="1" defaultChecked={!c.soloAComprar} />
