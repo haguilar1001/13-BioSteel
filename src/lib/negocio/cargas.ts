@@ -32,6 +32,7 @@ import {
 import { parseInstitucional, parseOrtopedistas, persistirEncuestas } from "./importar-encuestas";
 import { parseCirugias, persistirCirugias } from "./importar-cirugias";
 import { parseCapacitaciones, persistirCapacitaciones } from "./importar-capacitaciones";
+import { parseNomina, persistirNomina } from "./importar-nomina";
 import { parsePedidos, persistirPedidos } from "./importar-pedidos";
 import {
   parseIndicadorCompras, persistirIndicadorCompras,
@@ -43,7 +44,7 @@ export type CargaClave = DatasetKey | "pyg" | "flujo" | "presupuesto"
   | "compras-tipos" | "compras-ordenes" | "compras-pendientes" | "compras-facturas"
   | "compras-entradas" | "pedidos"
   | "ind-compras" | "ind-proveedores"
-  | "encuestas-inst" | "encuestas-ortho" | "cirugias" | "capacitaciones";
+  | "encuestas-inst" | "encuestas-ortho" | "cirugias" | "capacitaciones" | "nomina";
 
 /** Módulo al que pertenece el archivo; solo sirve para agrupar /cargar. */
 export type GrupoCarga = "Comercial" | "Financiero" | "Inventario" | "Compras" | "Pedidos" | "Calidad" | "Gestión Humana";
@@ -422,6 +423,24 @@ export const CARGAS: CargaDef[] = [
         titulo: "Compras · Facturas de Proveedores", archivo: nombre, hoja: p.hoja,
         filas: p.filas, cargadas, omitidas: p.omitidas,
         estrategia: `reemplaza ${p.periodos.length} periodo(s) [${p.periodos[0]} … ${p.periodos[p.periodos.length - 1]}]: ${nf.format(cargadas)} documentos · ${nf.format(Math.round(total))}`,
+      };
+    },
+  },
+  {
+    // Un libro con una hoja por año ("SALARIOS 2025", "SALARIOS 2026"); el
+    // año sale del nombre de la hoja. Se guarda por (año, cédula): actualiza
+    // y agrega, pero no borra a quien ya no aparezca en el archivo.
+    clave: "nomina", titulo: "Nómina · Costo de Personal", grupo: "Gestión Humana", permiso: "carga.nomina",
+    archivoSugerido: "Nomina.xlsx",
+    async procesar(buffer, nombre) {
+      const p = parseNomina(buffer);
+      const cargadas = await persistirNomina(p);
+      const porHoja = p.hojas.map((h) => `${h.hoja}: ${nf.format(h.empleados)} empl. · ${nf.format(Math.round(h.costoMensual))}/mes`).join(" · ");
+      const omitidas = p.hojasOmitidas.length ? ` · hoja(s) sin año en el nombre, omitidas: ${p.hojasOmitidas.join(", ")}` : "";
+      return {
+        titulo: "Nómina · Costo de Personal", archivo: nombre, hoja: p.hojas.map((h) => h.hoja).join(", "),
+        filas: p.datos.length + p.hojas.reduce((a, h) => a + h.omitidas, 0), cargadas, omitidas: p.hojas.reduce((a, h) => a + h.omitidas, 0),
+        estrategia: `upsert por año/cédula [${porHoja}]${omitidas}`,
       };
     },
   },
