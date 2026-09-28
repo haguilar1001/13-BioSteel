@@ -14,21 +14,28 @@ export const metadata = { title: "Recepción Técnica · BioSteel" };
 
 export default async function RecepcionPage({
   searchParams,
-}: { searchParams: Promise<{ tipo?: string; q?: string }> }) {
+}: { searchParams: Promise<{ tipo?: string; q?: string; lote?: string; ref?: string }> }) {
   const { usuario } = await requirePermiso("recepcion.view");
   const puedeGestionar = await puede(usuario, "recepcion.manage");
   const sp = await searchParams;
   const tipo = sp.tipo === "importacion" || sp.tipo === "nacional" ? (sp.tipo as TipoRecepcion) : undefined;
   const q = sp.q;
+  const lote = sp.lote;
+  const referencia = sp.ref;
 
-  const filas = await listarRecepciones({ tipo, q });
+  const filas = await listarRecepciones({ tipo, q, lote, referencia });
 
   const linkTipo = (t?: string) => {
     const p = new URLSearchParams();
     if (t) p.set("tipo", t);
     if (q) p.set("q", q);
+    if (lote) p.set("lote", lote);
+    if (referencia) p.set("ref", referencia);
     return `/osteosintesis/recepcion${p.toString() ? `?${p}` : ""}`;
   };
+  // Solo quita q/lote/referencia; conserva la pestaña de tipo elegida.
+  const hrefLimpiar = tipo ? `/osteosintesis/recepcion?tipo=${tipo}` : "/osteosintesis/recepcion";
+  const filtrosTexto = [q && `"${q}"`, lote && `lote "${lote}"`, referencia && `referencia "${referencia}"`].filter(Boolean);
 
   return (
     <>
@@ -60,9 +67,11 @@ export default async function RecepcionPage({
             <a href={linkTipo("nacional")} className={`btn${tipo === "nacional" ? " primary" : ""}`}>Nacionales</a>
             {tipo && <input type="hidden" name="tipo" value={tipo} />}
             <span style={{ flex: 1 }} />
-            <input type="search" name="q" defaultValue={q ?? ""} placeholder="Consecutivo, proveedor, factura, ODC…" className="select" style={{ minWidth: 240 }} />
+            <input type="search" name="q" defaultValue={q ?? ""} placeholder="Consecutivo, proveedor, factura, ODC…" className="select" style={{ minWidth: 220 }} />
+            <input type="search" name="lote" defaultValue={lote ?? ""} placeholder="Lote…" className="select" style={{ minWidth: 140 }} />
+            <input type="search" name="ref" defaultValue={referencia ?? ""} placeholder="Referencia…" className="select" style={{ minWidth: 140 }} />
             <button type="submit" className="btn primary">Buscar</button>
-            {q && <a href={linkTipo()} className="btn">Limpiar</a>}
+            {(q || lote || referencia) && <a href={hrefLimpiar} className="btn">Limpiar</a>}
           </form>
         </div>
         <div className="tbl-wrap">
@@ -76,7 +85,9 @@ export default async function RecepcionPage({
             </thead>
             <tbody>
               {filas.length === 0 ? (
-                <tr><td colSpan={10} className="empty">Sin recepciones{q ? ` para "${q}"` : ""}.</td></tr>
+                <tr><td colSpan={10} className="empty">
+                  Sin recepciones{filtrosTexto.length ? ` para ${filtrosTexto.join(" · ")}` : ""}.
+                </td></tr>
               ) : (
                 filas.map((r) => (
                   <tr key={r.id}>

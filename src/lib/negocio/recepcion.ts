@@ -132,7 +132,12 @@ export async function monedas(): Promise<{ codigo: string; nombre: string; simbo
 }
 
 // --- Listado ---
-export interface FiltroRecepcion { tipo?: TipoRecepcion; q?: string }
+export interface FiltroRecepcion {
+  tipo?: TipoRecepcion; q?: string;
+  /** Lote y referencia viven en el ítem, no en la recepción: se filtra por
+   * recepciones que tengan AL MENOS UN ítem que coincida. */
+  lote?: string; referencia?: string;
+}
 export interface FilaRecepcion {
   id: number;
   consecutivo: string;
@@ -149,6 +154,8 @@ export interface FilaRecepcion {
 
 export async function listarRecepciones(f: FiltroRecepcion = {}): Promise<FilaRecepcion[]> {
   const q = f.q?.trim();
+  const lote = f.lote?.trim();
+  const referencia = f.referencia?.trim();
   const filas = await prisma.recepcionTecnica.findMany({
     where: {
       ...(f.tipo ? { tipo: f.tipo } : {}),
@@ -160,6 +167,8 @@ export async function listarRecepciones(f: FiltroRecepcion = {}): Promise<FilaRe
             { odcPedido: { contains: q, mode: "insensitive" } },
           ] }
         : {}),
+      ...(lote ? { items: { some: { lote: { contains: lote, mode: "insensitive" } } } } : {}),
+      ...(referencia ? { items: { some: { codigo: { contains: referencia, mode: "insensitive" } } } } : {}),
     },
     orderBy: [{ fechaInspeccion: "desc" }, { id: "desc" }],
     take: 300,

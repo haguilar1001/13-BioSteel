@@ -7,6 +7,7 @@ import { SubNav } from "../_components/SubNav";
 const ITEMS = [
   { href: "/indicadores", label: "Financieros" },
   { href: "/indicadores/compras", label: "Compras" },
+  { href: "/indicadores/almacen", label: "Almacén" },
 ];
 
 export default async function IndicadoresLayout({ children }: { children: React.ReactNode }) {

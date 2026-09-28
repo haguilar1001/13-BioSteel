@@ -55,6 +55,7 @@ export const MENU_BASE: MenuGrupoDef[] = [
   { id: "analisis", label: "Análisis", icon: "📊", items: [
     { href: "/indicadores", label: "📈 Indicadores Financieros", permiso: "cxp.view" },
     { href: "/indicadores/compras", label: "📐 Indicadores de Compras", permiso: "cxp.view" },
+    { href: "/indicadores/almacen", label: "📦 Indicadores de Almacén", permiso: "recepcion.view" },
     { href: "/pyg", label: "📄 PyG", permiso: "cxp.view" },
     { href: "/asistencia", label: "🩺 Asistencia Técnica", permiso: "cxp.view" },
     { href: "/asistencia/pqrs", label: "📣 PQRS", permiso: "cxp.view" },
