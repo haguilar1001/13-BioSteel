@@ -11,12 +11,14 @@ import { formatPorcentaje } from "@/lib/format";
 import { Monto } from "../../_components/Monto";
 import { FiltroAuto } from "../../_components/FiltroAuto";
 import { aniosFacturacion, gastosPorMes, type GastoMes } from "@/lib/negocio/facturacion";
+import { obtenerMeta } from "@/lib/negocio/metas-indicador";
 
 /**
  * Metas vigentes de los tres indicadores, en porcentaje.
+ * · valor: editable en Administración → Metas de indicadores (antes fija en 90 %).
  * · anuladas: pasó de 1 % a 3 % el 2026-09-03, por decisión del proceso.
  */
-const METAS = { valor: 90, tiempo: 70, anuladas: 3 } as const;
+const METAS_FIJAS = { tiempo: 70, anuladas: 3 } as const;
 
 const MES_ABBR = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 const nf = new Intl.NumberFormat("es-CO");
@@ -33,7 +35,7 @@ export default async function GastosPage({ searchParams }: { searchParams: Promi
     return <div className="card"><div className="card-body"><div className="empty">Sin gastos cargados. Sube los archivos en <code>/cargar</code>.</div></div></div>;
   }
   const anio = sp.anio && anios.includes(Number(sp.anio)) ? Number(sp.anio) : anios[anios.length - 1]!;
-  const meses = await gastosPorMes(anio);
+  const [meses, metaValor] = await Promise.all([gastosPorMes(anio), obtenerMeta("gastos.valor")]);
 
   // Totales del año.
   const t = meses.reduce((a, m) => ({
@@ -61,7 +63,7 @@ export default async function GastosPage({ searchParams }: { searchParams: Promi
 
       {/* VR facturado / VR gastos */}
       <div className="card" style={{ marginBottom: 12 }}>
-        <div className="chart-head">Vr. facturado / Vr. gastos <span className="hact">meta ≥ {METAS.valor} %</span></div>
+        <div className="chart-head">Vr. facturado / Vr. gastos <span className="hact">meta ≥ {metaValor} %</span></div>
         <div className="tbl-wrap">
           <table className="tabla-fit">
             <thead><tr><th>Mes</th><th className="r">Vr. factura mes</th><th className="r"># Facturas</th><th className="r">Vr. gastos</th><th className="r"># Gastos</th><th className="r">% Valor</th><th className="r">% Cant.</th></tr></thead>
@@ -73,7 +75,7 @@ export default async function GastosPage({ searchParams }: { searchParams: Promi
                   <td className="r num">{nf.format(m.nFacturasMes)}</td>
                   <td className="r num flag"><Monto value={m.vrGastos} /></td>
                   <td className="r num">{nf.format(m.nGastos)}</td>
-                  <td className="r num" style={{ fontWeight: 700 }}>{formatPorcentaje(m.pctValor)}{marca(m.pctValor >= METAS.valor)}</td>
+                  <td className="r num" style={{ fontWeight: 700 }}>{formatPorcentaje(m.pctValor)}{marca(m.pctValor >= metaValor)}</td>
                   <td className="r num">{formatPorcentaje(m.pctCantidad)}</td>
                 </tr>
               ))}
@@ -83,7 +85,7 @@ export default async function GastosPage({ searchParams }: { searchParams: Promi
                 <td className="r num" style={{ fontWeight: 800 }}>{nf.format(t.nFacturasMes)}</td>
                 <td className="r num" style={{ fontWeight: 800 }}><Monto value={t.vrGastos} /></td>
                 <td className="r num" style={{ fontWeight: 800 }}>{nf.format(t.nGastos)}</td>
-                <td className="r num" style={{ fontWeight: 800 }}>{formatPorcentaje(tPctValor)}{marca(tPctValor >= METAS.valor)}</td>
+                <td className="r num" style={{ fontWeight: 800 }}>{formatPorcentaje(tPctValor)}{marca(tPctValor >= metaValor)}</td>
                 <td className="r num" style={{ fontWeight: 800 }}>{formatPorcentaje(t.nGastos ? (t.nFacturasMes / t.nGastos) * 100 : 0)}</td>
               </tr>
             </tbody>
@@ -93,7 +95,7 @@ export default async function GastosPage({ searchParams }: { searchParams: Promi
 
       {/* Tiempo de facturación 0–5 días */}
       <div className="card" style={{ marginBottom: 12 }}>
-        <div className="chart-head">Tiempo de facturación (0–5 días) <span className="hact">meta ≥ {METAS.tiempo} %</span></div>
+        <div className="chart-head">Tiempo de facturación (0–5 días) <span className="hact">meta ≥ {METAS_FIJAS.tiempo} %</span></div>
         <div className="tbl-wrap">
           <table className="tabla-fit">
             <thead><tr><th>Mes</th><th className="r"># Gastos</th><th className="r">Cumpl. 0–5</th><th className="r">6–8</th><th className="r">&gt; 8</th><th className="r">Pendientes</th><th className="r">Vr. pendientes</th><th className="r">% cumplido</th></tr></thead>
@@ -107,7 +109,7 @@ export default async function GastosPage({ searchParams }: { searchParams: Promi
                   <td className="r num">{nf.format(m.cumpl9)}</td>
                   <td className="r num">{nf.format(m.pendientes)}</td>
                   <td className="r num flag"><Monto value={m.vrPendientes} /></td>
-                  <td className="r num" style={{ fontWeight: 700 }}>{formatPorcentaje(m.pctCumplido)}{marca(m.pctCumplido >= METAS.tiempo)}</td>
+                  <td className="r num" style={{ fontWeight: 700 }}>{formatPorcentaje(m.pctCumplido)}{marca(m.pctCumplido >= METAS_FIJAS.tiempo)}</td>
                 </tr>
               ))}
               <tr className="fila-total">
@@ -118,7 +120,7 @@ export default async function GastosPage({ searchParams }: { searchParams: Promi
                 <td className="r num" style={{ fontWeight: 800 }}>{nf.format(t.cumpl9)}</td>
                 <td className="r num" style={{ fontWeight: 800 }}>{nf.format(t.pendientes)}</td>
                 <td className="r num" style={{ fontWeight: 800 }}><Monto value={t.vrPendientes} /></td>
-                <td className="r num" style={{ fontWeight: 800 }}>{formatPorcentaje(tPctCumplido)}{marca(tPctCumplido >= METAS.tiempo)}</td>
+                <td className="r num" style={{ fontWeight: 800 }}>{formatPorcentaje(tPctCumplido)}{marca(tPctCumplido >= METAS_FIJAS.tiempo)}</td>
               </tr>
             </tbody>
           </table>
@@ -127,7 +129,7 @@ export default async function GastosPage({ searchParams }: { searchParams: Promi
 
       {/* Facturas anuladas */}
       <div className="card">
-        <div className="chart-head">Facturas anuladas <span className="hact">meta ≤ {METAS.anuladas} %</span></div>
+        <div className="chart-head">Facturas anuladas <span className="hact">meta ≤ {METAS_FIJAS.anuladas} %</span></div>
         <div className="tbl-wrap">
           <table className="tabla-fit">
             <thead><tr><th>Mes</th><th className="r"># Notas anulación</th><th className="r"># Facturas del mes</th><th className="r">% anuladas</th></tr></thead>
@@ -137,14 +139,14 @@ export default async function GastosPage({ searchParams }: { searchParams: Promi
                   <td style={{ fontWeight: 600 }}>{MES_ABBR[m.mes]}</td>
                   <td className="r num">{nf.format(m.notasAnulacion)}</td>
                   <td className="r num flag">{nf.format(m.nFacturasMes)}</td>
-                  <td className="r num" style={{ fontWeight: 700 }}>{formatPorcentaje(m.pctAnuladas)}{marca(m.pctAnuladas <= METAS.anuladas)}</td>
+                  <td className="r num" style={{ fontWeight: 700 }}>{formatPorcentaje(m.pctAnuladas)}{marca(m.pctAnuladas <= METAS_FIJAS.anuladas)}</td>
                 </tr>
               ))}
               <tr className="fila-total">
                 <td style={{ fontWeight: 800 }}>Total</td>
                 <td className="r num" style={{ fontWeight: 800 }}>{nf.format(t.notasAnulacion)}</td>
                 <td className="r num" style={{ fontWeight: 800 }}>{nf.format(t.nFacturasMes)}</td>
-                <td className="r num" style={{ fontWeight: 800 }}>{formatPorcentaje(tPctAnul)}{marca(tPctAnul <= METAS.anuladas)}</td>
+                <td className="r num" style={{ fontWeight: 800 }}>{formatPorcentaje(tPctAnul)}{marca(tPctAnul <= METAS_FIJAS.anuladas)}</td>
               </tr>
             </tbody>
           </table>

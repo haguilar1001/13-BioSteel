@@ -1830,3 +1830,19 @@ model EvaluacionProveedor {
   @@index([anio, mes])
   @@index([proveedor])
 }
+
+// ==========================================================
+// Metas de indicadores — valores que hoy están escritos a mano en el código
+// (p. ej. "meta ≥ 90 %" en Indicadores de Gastos) y que el proceso mueve de
+// vez en cuando. `clave` identifica QUÉ meta es ("gastos.valor"); si no hay
+// fila para una clave, la pantalla usa su valor por defecto (ver
+// metas-indicador.ts), así que agregar una meta nueva nunca rompe nada.
+// ==========================================================
+model MetaIndicador {
+  id             Int      @id @default(autoincrement())
+  clave          String   @unique
+  valor          Decimal  @db.Decimal(6, 2)
+  descripcion    String   @default("")
+  actualizadoEn  DateTime @updatedAt
+  actualizadoPor String   @default("")
+}
