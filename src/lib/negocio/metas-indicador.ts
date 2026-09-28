@@ -22,6 +22,20 @@ export const METAS_DEF = [
     porDefecto: 90,
     sufijo: "%",
   },
+  {
+    clave: "gastos.tiempo",
+    label: "Gastos · Tiempo de facturación (0–5 días)",
+    descripcion: "% mínimo de gastos facturados dentro de 0–5 días, en Facturación → Indicadores de Gastos.",
+    porDefecto: 70,
+    sufijo: "%",
+  },
+  {
+    clave: "gastos.anuladas",
+    label: "Gastos · Facturas anuladas",
+    descripcion: "% máximo de facturas anuladas sobre el total del mes, en Facturación → Indicadores de Gastos (esta es una meta \"como máximo\", no \"como mínimo\").",
+    porDefecto: 3,
+    sufijo: "%",
+  },
 ] as const;
 
 export type ClaveMeta = (typeof METAS_DEF)[number]["clave"];
