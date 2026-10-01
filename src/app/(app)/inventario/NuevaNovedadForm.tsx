@@ -6,7 +6,7 @@
 //   aplican sobre un equipo ya existente.
 // ==========================================================
 import { useEffect, useRef, useState, useActionState } from "react";
-import { registrarNovedadAction, crearEquipoCompraAction } from "./actions";
+import { registrarNovedadAction, crearEquipoCompraAction, crearEquipoIngresoExistenteAction } from "./actions";
 import { SelectOCrear } from "./SelectOCrear";
 
 interface EquipoOpc {
@@ -22,12 +22,18 @@ const EST_LABEL: Record<Estado, string> = { activo: "Activo", en_reparacion: "En
 
 const NOV_OP = [
   { v: "compra", l: "🆕 Compra (equipo nuevo)" },
+  { v: "ingreso_existente", l: "📦 Ingreso de equipo existente" },
   { v: "reparacion", l: "🔧 Enviar a reparación" },
   { v: "retorno_reparacion", l: "↩️ Retorno de reparación" },
   { v: "dano", l: "⚠️ Reportar daño" },
   { v: "baja", l: "🚫 Dar de baja" },
   { v: "traslado", l: "🚚 Trasladar entre sedes" },
 ] as const;
+
+const AYUDA_INGRESO_EXISTENTE =
+  "Úsalo para registrar equipos que ya pertenecen a BioSteel pero que no habían sido ingresados al inventario. " +
+  "No corresponde a una compra nueva. Indica la fecha en que se ingresa al sistema y, si la conoces, la fecha de " +
+  "compra original. Adjunta o describe el soporte que respalda el ingreso.";
 
 interface ItemNuevo { descripcion: string; tipo: "equipo" | "accesorio"; cantidad: number; lote: string; estado: Estado; }
 const ITEM_VACIO: ItemNuevo = { descripcion: "", tipo: "accesorio", cantidad: 1, lote: "", estado: "activo" };
@@ -36,16 +42,20 @@ export default function NuevaNovedadForm({ equipos, sedes, categorias, marcas }:
   const dlg = useRef<HTMLDialogElement>(null);
   const [novState, novAction, novPending] = useActionState(registrarNovedadAction, {} as { ok?: boolean; error?: string });
   const [compraState, compraAction, compraPending] = useActionState(crearEquipoCompraAction, {} as { ok?: boolean; error?: string });
+  const [ingresoState, ingresoAction, ingresoPending] = useActionState(crearEquipoIngresoExistenteAction, {} as { ok?: boolean; error?: string });
 
   const [tipo, setTipo] = useState<string>("compra");
   const [equipoId, setEquipoId] = useState<number | "">("");
   const [items, setItems] = useState<ItemNuevo[]>([{ ...ITEM_VACIO, tipo: "equipo", descripcion: "" }]);
-  // Compra: opción de clonar un equipo existente.
+  // Compra / Ingreso de equipo existente: opción de clonar un equipo existente.
   const [baseId, setBaseId] = useState<number | "">("");
   const [cat, setCat] = useState("");
   const [marca, setMarca] = useState("");
+  const [fechaIngreso, setFechaIngreso] = useState("");
 
   const esCompra = tipo === "compra";
+  const esIngresoExistente = tipo === "ingreso_existente";
+  const esAltaEquipo = esCompra || esIngresoExistente;
   const equipo = equipos.find((e) => e.id === equipoId);
 
   const resetCompra = () => { setBaseId(""); setCat(""); setMarca(""); setItems([{ ...ITEM_VACIO, tipo: "equipo" }]); };
@@ -60,20 +70,21 @@ export default function NuevaNovedadForm({ equipos, sedes, categorias, marcas }:
     setItems(base.items.map((it) => ({ descripcion: it.descripcion, tipo: it.tipo, cantidad: it.cantidad, lote: it.lote ?? "", estado: it.estado })));
   };
 
-  // Cierra y resetea al guardar con éxito (cualquiera de las dos acciones).
+  // Cierra y resetea al guardar con éxito (cualquiera de las tres acciones).
   useEffect(() => {
-    if (novState.ok || compraState.ok) {
+    if (novState.ok || compraState.ok || ingresoState.ok) {
       dlg.current?.close();
-      setTipo("compra"); setEquipoId(""); resetCompra();
+      setTipo("compra"); setEquipoId(""); setFechaIngreso(""); resetCompra();
     }
-  }, [novState.ok, compraState.ok]);
+  }, [novState.ok, compraState.ok, ingresoState.ok]);
 
   const setItem = (i: number, k: keyof ItemNuevo, v: string | number) =>
     setItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, [k]: v } : it)));
   const addItem = () => setItems((prev) => [...prev, { ...ITEM_VACIO }]);
   const delItem = (i: number) => setItems((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
 
-  const compraInvalida = items.length === 0 || items.some((it) => !it.descripcion.trim());
+  const compraInvalida = items.length === 0 || items.some((it) => !it.descripcion.trim())
+    || (esIngresoExistente && !fechaIngreso);
 
   return (
     <>
@@ -90,12 +101,17 @@ export default function NuevaNovedadForm({ equipos, sedes, categorias, marcas }:
             </select>
           </div>
 
-          {/* ---------- COMPRA: crear equipo nuevo ---------- */}
-          {esCompra ? (
-            <form action={compraAction}>
+          {/* ---------- COMPRA / INGRESO DE EQUIPO EXISTENTE: crear equipo nuevo ---------- */}
+          {esAltaEquipo ? (
+            <form action={esIngresoExistente ? ingresoAction : compraAction}>
               <input type="hidden" name="items" value={JSON.stringify(items)} />
+              {esIngresoExistente && (
+                <p style={{ background: "var(--brand-tint)", color: "var(--ink)", border: "1px solid var(--brand-soft)", borderRadius: "var(--r-sm)", padding: "10px 12px", fontSize: 13, marginBottom: 12 }}>
+                  {AYUDA_INGRESO_EXISTENTE}
+                </p>
+              )}
               <div className="field" style={{ marginBottom: 12 }}>
-                <label>Basar en equipo existente (opcional — compras otra unidad)</label>
+                <label>Basar en equipo existente (opcional — {esIngresoExistente ? "mismo modelo" : "compras otra unidad"})</label>
                 <select value={baseId} onChange={(e) => clonarDe(e.target.value ? Number(e.target.value) : "")}>
                   <option value="">— Equipo totalmente nuevo —</option>
                   {equipos.map((e) => <option key={e.id} value={e.id}>{e.ciudad} · {e.etiqueta}</option>)}
@@ -115,8 +131,22 @@ export default function NuevaNovedadForm({ equipos, sedes, categorias, marcas }:
                   <SelectOCrear name="marca" opciones={marcas} value={marca} onValueChange={setMarca} required placeholder="Nueva marca / modelo…" crearLabel="➕ Crear nueva marca…" />
                 </div>
                 <div className="field"><label>Nombre (opcional)</label><input name="nombre" placeholder="Motor Hall #2" /></div>
-                <div className="field"><label>Fecha de compra</label><input name="fecha" type="date" /></div>
-                <div className="field"><label>Factura / motivo (opcional)</label><input name="descripcion" placeholder="N° factura, proveedor…" /></div>
+                {esIngresoExistente ? (
+                  <>
+                    <div className="field"><label>Fecha de ingreso al inventario</label>
+                      <input name="fechaIngreso" type="date" required value={fechaIngreso} onChange={(e) => setFechaIngreso(e.target.value)} />
+                    </div>
+                    <div className="field"><label>Fecha de compra (opcional)</label><input name="fechaCompra" type="date" /></div>
+                    <div className="field"><label>Soporte / motivo (opcional)</label>
+                      <input name="descripcion" placeholder="Acta de verificación física, factura antigua, encontrado en bodega…" />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="field"><label>Fecha de compra</label><input name="fecha" type="date" /></div>
+                    <div className="field"><label>Factura / motivo (opcional)</label><input name="descripcion" placeholder="N° factura, proveedor…" /></div>
+                  </>
+                )}
               </div>
 
               <div className="subhead" style={{ margin: "6px 0 8px" }}>Ítems del equipo</div>
@@ -138,10 +168,16 @@ export default function NuevaNovedadForm({ equipos, sedes, categorias, marcas }:
               </div>
               <button type="button" className="btn" onClick={addItem} style={{ marginBottom: 12 }}>+ Agregar ítem</button>
 
-              {compraState.error && <p className="alert" style={{ color: "var(--bad)" }}>{compraState.error}</p>}
+              {(esIngresoExistente ? ingresoState.error : compraState.error) && (
+                <p className="alert" style={{ color: "var(--bad)" }}>{esIngresoExistente ? ingresoState.error : compraState.error}</p>
+              )}
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                 <button type="button" className="btn" onClick={() => dlg.current?.close()}>Cancelar</button>
-                <button className="btn primary" disabled={compraPending || compraInvalida}>{compraPending ? "Creando…" : "Crear equipo y registrar compra"}</button>
+                <button className="btn primary" disabled={(esIngresoExistente ? ingresoPending : compraPending) || compraInvalida}>
+                  {esIngresoExistente
+                    ? (ingresoPending ? "Creando…" : "Crear equipo y registrar ingreso")
+                    : (compraPending ? "Creando…" : "Crear equipo y registrar compra")}
+                </button>
               </div>
             </form>
           ) : (

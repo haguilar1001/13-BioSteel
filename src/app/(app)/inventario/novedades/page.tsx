@@ -13,7 +13,8 @@ import type { TipoNovedad } from "@prisma/client";
 import NuevaNovedadForm from "../NuevaNovedadForm";
 
 const TIPO_TAG: Record<TipoNovedad, string> = {
-  compra: "t-ok", baja: "t-bad", dano: "t-w1", reparacion: "t-w1", retorno_reparacion: "t-ok", traslado: "t-blue",
+  compra: "t-ok", ingreso_existente: "t-blue", baja: "t-bad", dano: "t-w1",
+  reparacion: "t-w1", retorno_reparacion: "t-ok", traslado: "t-blue",
 };
 
 export default async function NovedadesPage() {
@@ -51,11 +52,16 @@ export default async function NovedadesPage() {
         </div>
       </div>
 
-      <div className="kpis">
+      <div className="kpis k5">
         <div className="kpi k-ok">
           <div className="klabel">🆕 Compras</div>
           <div className="kval num">{formatNumero(conteo.compra ?? 0)}</div>
           <div className="ksub"><span className="flag">altas de equipos</span></div>
+        </div>
+        <div className="kpi k-ingreso">
+          <div className="klabel">📦 Ingresos de equipos existentes</div>
+          <div className="kval num">{formatNumero(conteo.ingreso_existente ?? 0)}</div>
+          <div className="ksub"><span className="flag">ya eran de BioSteel, no son compra nueva</span></div>
         </div>
         <div className="kpi k-w">
           <div className="klabel">🔧 Reparaciones</div>
@@ -98,6 +104,7 @@ export default async function NovedadesPage() {
                     {n.tipo === "traslado" && n.sedeOrigen && n.sedeDestino
                       ? <>{n.sedeOrigen} → <strong>{n.sedeDestino}</strong></>
                       : (n.descripcion ?? "—")}
+                    {n.fechaCompraOriginal && <div>Fecha de compra: {formatFechaSello(n.fechaCompraOriginal)}</div>}
                   </td>
                   <td>
                     {n.estadoNuevo

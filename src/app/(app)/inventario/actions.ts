@@ -239,6 +239,75 @@ export async function crearEquipoCompraAction(_prev: AccionState, fd: FormData):
   return { ok: true };
 }
 
+// --- Ingreso de equipo existente: equipo que YA era de la empresa y estaba
+// pendiente por ingresar al inventario (no es una compra nueva) ------------
+const ingresoExistenteSchema = z.object({
+  sedeId: z.coerce.number().int().positive("Selecciona una sede."),
+  categoria: z.string().trim().min(1, "Indica la categoría."),
+  marca: z.string().trim().min(1, "Indica la marca."),
+  nombre: z.string().trim().optional(),
+  fechaIngreso: z.string().trim().min(1, "Indica la fecha de ingreso al inventario."),
+  fechaCompra: z.string().trim().optional(),
+  descripcion: z.string().trim().optional(),
+  items: z.array(compraItemSchema).min(1, "Agrega al menos un ítem."),
+});
+
+export async function crearEquipoIngresoExistenteAction(_prev: AccionState, fd: FormData): Promise<AccionState> {
+  const g = await guard();
+  if ("error" in g) return g;
+
+  let itemsRaw: unknown = [];
+  try { itemsRaw = JSON.parse(String(fd.get("items") ?? "[]")); } catch { return { error: "Lista de ítems inválida." }; }
+
+  const p = ingresoExistenteSchema.safeParse({
+    sedeId: fd.get("sedeId"), categoria: fd.get("categoria"), marca: fd.get("marca"),
+    nombre: fd.get("nombre") || undefined,
+    fechaIngreso: fd.get("fechaIngreso"),
+    fechaCompra: fd.get("fechaCompra") || undefined,
+    descripcion: fd.get("descripcion") || undefined, items: itemsRaw,
+  });
+  if (!p.success) return { error: p.error.issues[0]?.message ?? "Datos inválidos." };
+  const { sedeId, categoria, marca, nombre, fechaIngreso, fechaCompra, descripcion, items } = p.data;
+
+  const categoriaUpper = categoria.toUpperCase();
+  await prisma.$transaction(async (tx) => {
+    const codigo = await generarCodigo(tx, categoriaUpper);
+    const equipo = await tx.equipoInventario.create({
+      data: {
+        codigo,
+        sedeId,
+        categoria: categoriaUpper,
+        marca: marca.toUpperCase(),
+        nombre: nombre || null,
+        items: {
+          create: items.map((it) => ({
+            descripcion: it.descripcion.toUpperCase(),
+            tipo: it.tipo,
+            cantidad: it.cantidad,
+            lote: it.lote || null,
+            estado: it.estado,
+          })),
+        },
+      },
+    });
+    await tx.novedadInventario.create({
+      data: {
+        tipo: "ingreso_existente",
+        equipoId: equipo.id,
+        sedeDestinoId: sedeId,
+        estadoNuevo: "activo",
+        descripcion: descripcion || "Ingreso de equipo existente",
+        usuarioId: g.usuarioId,
+        fecha: new Date(fechaIngreso),
+        fechaCompraOriginal: fechaCompra ? new Date(fechaCompra) : null,
+      },
+    });
+  });
+
+  refresh();
+  return { ok: true };
+}
+
 // --- Novedades sobre equipos existentes (baja, daño, reparación, retorno, traslado) ---
 const NOVEDADES_OP = ["baja", "dano", "reparacion", "retorno_reparacion", "traslado"] as const;
 

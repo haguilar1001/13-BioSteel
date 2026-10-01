@@ -107,7 +107,8 @@ enum TipoItemInventario {
 }
 
 enum TipoNovedad {
-  compra // Alta / ingreso de un equipo nuevo
+  compra // Alta / ingreso de un equipo nuevo (compra)
+  ingreso_existente // Alta de un equipo que YA era de la empresa, pendiente por ingresar al inventario
   baja // Retiro definitivo del inventario
   dano // Reporte de daño
   reparacion // Envío a reparación
@@ -858,6 +859,10 @@ model NovedadInventario {
   estadoAnterior EstadoInventario?
   estadoNuevo    EstadoInventario?
   descripcion    String?
+  /// Solo para `ingreso_existente`: la fecha de compra ORIGINAL del equipo,
+  /// si se conoce (es distinta de `fecha`, que ahí es la fecha de ingreso al
+  /// inventario). Opcional porque muchas veces no se sabe.
+  fechaCompraOriginal DateTime? @db.Date
   usuario        Usuario?          @relation(fields: [usuarioId], references: [id])
   usuarioId      Int?
 

@@ -74,7 +74,7 @@ export default function SoporteDoc({ s }: { s: SoporteNovedad }) {
         <span className="ico">{novedadIcono(s.tipo)}</span>
         <span className="lbl">{novedadLabel(s.tipo)}</span>
         <span className="meta">
-          Fecha de la novedad<br /><b>{formatFechaSello(s.fecha)}</b>
+          {s.tipo === "ingreso_existente" ? "Fecha de ingreso al inventario" : "Fecha de la novedad"}<br /><b>{formatFechaSello(s.fecha)}</b>
         </span>
       </div>
 
@@ -84,7 +84,10 @@ export default function SoporteDoc({ s }: { s: SoporteNovedad }) {
           <h3>Datos de la novedad</h3>
           <div className="sop-grid">
             <Campo k="Tipo de novedad" v={`${novedadIcono(s.tipo)} ${novedadLabel(s.tipo)}`} big />
-            <Campo k="Fecha de la novedad" v={formatFechaSello(s.fecha)} big />
+            <Campo k={s.tipo === "ingreso_existente" ? "Fecha de ingreso al inventario" : "Fecha de la novedad"} v={formatFechaSello(s.fecha)} big />
+            {s.fechaCompraOriginal && (
+              <Campo k="Fecha de compra original" v={formatFechaSello(s.fechaCompraOriginal)} />
+            )}
             {cambiaEstado && (
               <Campo
                 k="Cambio de estado"

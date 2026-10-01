@@ -33,6 +33,7 @@ export { prefijoCodigo, formatCodigo, siguienteNumero } from "@/lib/inventario-c
 export function novedadLabel(t: TipoNovedad): string {
   return {
     compra: "Compra / Alta",
+    ingreso_existente: "Ingreso de equipo existente",
     baja: "Baja",
     dano: "Daño",
     reparacion: "Envío a reparación",
@@ -41,7 +42,10 @@ export function novedadLabel(t: TipoNovedad): string {
   }[t];
 }
 export function novedadIcono(t: TipoNovedad): string {
-  return { compra: "🆕", baja: "🚫", dano: "⚠️", reparacion: "🔧", retorno_reparacion: "↩️", traslado: "🚚" }[t];
+  return {
+    compra: "🆕", ingreso_existente: "📦", baja: "🚫", dano: "⚠️",
+    reparacion: "🔧", retorno_reparacion: "↩️", traslado: "🚚",
+  }[t];
 }
 
 // ---------- Tipos de salida ----------
@@ -287,6 +291,8 @@ export interface NovedadVista {
   estadoAnterior: EstadoInventario | null;
   estadoNuevo: EstadoInventario | null;
   descripcion: string | null;
+  /** Solo en `ingreso_existente`: la fecha de compra original, si se conoce. */
+  fechaCompraOriginal: Date | null;
   usuario: string | null;
 }
 
@@ -338,6 +344,7 @@ export async function listarNovedades(limite = 200): Promise<NovedadVista[]> {
     estadoAnterior: n.estadoAnterior,
     estadoNuevo: n.estadoNuevo,
     descripcion: n.descripcion,
+    fechaCompraOriginal: n.fechaCompraOriginal,
     usuario: n.usuario?.nombre ?? null,
   }));
 }
@@ -361,6 +368,8 @@ export interface SoporteNovedad {
   descripcion: string | null;
   estadoAnterior: EstadoInventario | null;
   estadoNuevo: EstadoInventario | null;
+  /** Solo en `ingreso_existente`: la fecha de compra original, si se conoce. */
+  fechaCompraOriginal: Date | null;
   // Equipo
   equipoCodigo: string | null;
   categoria: string;
@@ -401,6 +410,7 @@ function mapSoporte(n: NonNullable<NovedadConSoporte>, sedeNombre: Map<number, s
     descripcion: n.descripcion,
     estadoAnterior: n.estadoAnterior,
     estadoNuevo: n.estadoNuevo,
+    fechaCompraOriginal: n.fechaCompraOriginal,
     equipoCodigo: n.equipo.codigo,
     categoria: n.equipo.categoria,
     marca: n.equipo.marca,

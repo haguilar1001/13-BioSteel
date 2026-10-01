@@ -343,6 +343,8 @@ h1, h2, h3 { margin: 0; }
 
 /* KPIs */
 .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+/* Fila de 5: compras + ingresos de equipos existentes + reparaciones + traslados + bajas. */
+.kpis.k5 { grid-template-columns: repeat(5, 1fr); }
 /* Fila de 6: saldo inicial · movimiento · saldo final (kardex). */
 .kpis.k6 { grid-template-columns: repeat(6, 1fr); }
 .kpi { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; box-shadow: var(--elev); position: relative; overflow: hidden; text-align: center; }
@@ -451,10 +453,12 @@ td.r, th.r { text-align: right; }
 .subhead { margin: 14px 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 700; }
 
 @media (max-width: 1400px) {
+  .kpis.k5 { grid-template-columns: repeat(3, 1fr); }
   .kpis.k6 { grid-template-columns: repeat(3, 1fr); }
 }
 @media (max-width: 900px) {
   .kpis { grid-template-columns: repeat(2, 1fr); }
+  .kpis.k5 { grid-template-columns: repeat(2, 1fr); }
   .kpis.k6 { grid-template-columns: repeat(2, 1fr); }
   .grid.two { grid-template-columns: 1fr; }
   .form-grid { grid-template-columns: 1fr; }
