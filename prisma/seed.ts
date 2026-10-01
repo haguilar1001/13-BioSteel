@@ -35,8 +35,12 @@ async function main() {
 
   const sedes = [
     { nombre: "Barranquilla (Administrativa)", tipo: "administrativa" as const, ciudad: "Barranquilla" },
+    { nombre: "Bodega Barranquilla", tipo: "bodega" as const, ciudad: "Barranquilla" },
     { nombre: "Bodega Cali", tipo: "bodega" as const, ciudad: "Cali" },
+    { nombre: "Bodega Cartagena", tipo: "bodega" as const, ciudad: "Cartagena" },
     { nombre: "Bodega Santa Marta", tipo: "bodega" as const, ciudad: "Santa Marta" },
+    { nombre: "Bodega Sincelejo", tipo: "bodega" as const, ciudad: "Sincelejo" },
+    { nombre: "Bodega Yopal", tipo: "bodega" as const, ciudad: "Yopal" },
   ];
   for (const s of sedes) {
     const existe = await prisma.sede.findFirst({ where: { nombre: s.nombre, empresaId: empresa.id } });
