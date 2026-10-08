@@ -2,11 +2,17 @@
 // Nómina (fuente: maestro por empleado y año — ver set-nomina.ts).
 //   Nomina = un registro por empleado × año.
 //   `total` = costo mensual cargado (salario + aportes patronales + provisiones).
-// El "costo anual" se estima como costo mensual × 12 (las provisiones ya vienen
-// mensualizadas en el Excel).
+//
+// TIEMPO ACTIVO (columnas FECHA INGRESO / FECHA RETIRO del Excel):
+//   · El costo del año de cada persona = total mensual × meses que estuvo
+//     activa ese año. Un retirado en marzo cuenta ~2,9 meses; quien ingresa en
+//     septiembre cuenta 4 meses. Así el Resumen incluye a los retirados por el
+//     tiempo que costaron, y no se infla con quien ya no está.
+//   · La fecha de retiro puede ser FUTURA (fin de contrato a término fijo): no
+//     recorta el año hasta que llega, y la persona sigue "activa" hasta ese día.
+//   · En la lista de Empleados se muestra solo el personal ACTIVO hoy.
 // ==========================================================
 import "server-only";
-import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 
 /** Años con nómina cargada, ascendente. */
@@ -15,36 +21,121 @@ export async function aniosConNomina(): Promise<number[]> {
   return grupos.map((g) => g.anio).sort((a, b) => a - b);
 }
 
-export interface ResumenNomina {
-  headcount: number;
-  costoMensual: number; // Σ total
-  costoAnual: number; // costoMensual × 12
+const DIA_MS = 86_400_000;
+
+/** Hoy como día calendario (medianoche UTC) en hora de Colombia. */
+export function hoyColombia(): Date {
+  const p = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const [y, m, d] = p.split("-").map(Number) as [number, number, number];
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
+/** ¿Sigue activo en `hoy`? Sin retiro, o con un retiro que todavía no llega. */
+export function estaActivo(retiro: Date | null, hoy: Date): boolean {
+  return retiro == null || retiro.getTime() >= hoy.getTime();
+}
+
+/**
+ * Meses (fraccionados por días de cada mes) que una persona estuvo activa en
+ * `anio`. Sin ingreso se asume activa desde el 1.º de enero; sin retiro, hasta
+ * el 31 de diciembre. Ambos extremos cuentan (inclusive).
+ */
+export function mesesActivos(anio: number, ingreso: Date | null, retiro: Date | null): number {
+  let total = 0;
+  for (let m = 0; m < 12; m++) {
+    const ini = Date.UTC(anio, m, 1);
+    const fin = Date.UTC(anio, m + 1, 0);
+    const desde = Math.max(ini, ingreso ? ingreso.getTime() : ini);
+    const hasta = Math.min(fin, retiro ? retiro.getTime() : fin);
+    if (hasta < desde) continue;
+    const diasMes = (fin - ini) / DIA_MS + 1;
+    total += ((hasta - desde) / DIA_MS + 1) / diasMes;
+  }
+  return total;
+}
+
+interface FilaAnio {
+  cedula: string;
+  nombre: string;
+  proceso: string;
+  cargo: string;
+  empresa: string;
+  ciudad: string;
   baseSalarial: number;
   auxTransporte: number;
   seguridadSocial: number;
   prestaciones: number;
-  salarioPromedio: number; // baseSalarial / headcount
+  total: number;
+  tipoContrato: string;
+  fechaIngreso: Date | null;
+  fechaRetiro: Date | null;
+  /** Meses activos en el año (0–12). */
+  meses: number;
+  /** ¿Sigue activo hoy? */
+  activo: boolean;
 }
 
-/** KPIs del año. */
+/** Nómina del año con el tiempo activo de cada persona. Quien no estuvo activo ningún día del año se descarta. */
+async function filasAnio(anio: number): Promise<FilaAnio[]> {
+  const filas = await prisma.nomina.findMany({ where: { anio } });
+  const hoy = hoyColombia();
+  return filas
+    .map((f) => ({
+      cedula: f.cedula,
+      nombre: f.nombre,
+      proceso: f.proceso,
+      cargo: f.cargo,
+      empresa: f.empresa,
+      ciudad: f.ciudad,
+      baseSalarial: f.baseSalarial.toNumber(),
+      auxTransporte: f.auxTransporte.toNumber(),
+      seguridadSocial: f.seguridadSocial.toNumber(),
+      prestaciones: f.prestaciones.toNumber(),
+      total: f.total.toNumber(),
+      tipoContrato: f.tipoContrato,
+      fechaIngreso: f.fechaIngreso,
+      fechaRetiro: f.fechaRetiro,
+      meses: mesesActivos(anio, f.fechaIngreso, f.fechaRetiro),
+      activo: estaActivo(f.fechaRetiro, hoy),
+    }))
+    .filter((f) => f.meses > 0);
+}
+
+export interface ResumenNomina {
+  /** Personas que estuvieron activas en el año (incluye retirados). */
+  headcount: number;
+  /** De ellas, las que siguen activas hoy. */
+  activos: number;
+  retirados: number;
+  costoAnual: number; // Σ total × meses activos
+  costoMensual: number; // promedio mensual del año = costoAnual / 12
+  baseSalarial: number; // promedio mensual, ponderado por tiempo activo
+  auxTransporte: number;
+  seguridadSocial: number;
+  prestaciones: number;
+  salarioPromedio: number; // base salarial promedio por persona
+}
+
+type Campo = "baseSalarial" | "auxTransporte" | "seguridadSocial" | "prestaciones" | "total";
+const sumaPond = (fs: FilaAnio[], campo: Campo) => fs.reduce((s, f) => s + f[campo] * f.meses, 0);
+
+/** KPIs del año, con el costo ponderado por el tiempo activo de cada persona. */
 export async function resumenAnual(anio: number): Promise<ResumenNomina> {
-  const agg = await prisma.nomina.aggregate({
-    where: { anio },
-    _count: true,
-    _sum: { total: true, baseSalarial: true, auxTransporte: true, seguridadSocial: true, prestaciones: true },
-  });
-  const headcount = agg._count;
-  const costoMensual = agg._sum.total?.toNumber() ?? 0;
-  const baseSalarial = agg._sum.baseSalarial?.toNumber() ?? 0;
+  const fs = await filasAnio(anio);
+  const headcount = fs.length;
+  const activos = fs.filter((f) => f.activo).length;
+  const costoAnual = sumaPond(fs, "total");
   return {
     headcount,
-    costoMensual,
-    costoAnual: costoMensual * 12,
-    baseSalarial,
-    auxTransporte: agg._sum.auxTransporte?.toNumber() ?? 0,
-    seguridadSocial: agg._sum.seguridadSocial?.toNumber() ?? 0,
-    prestaciones: agg._sum.prestaciones?.toNumber() ?? 0,
-    salarioPromedio: headcount > 0 ? baseSalarial / headcount : 0,
+    activos,
+    retirados: headcount - activos,
+    costoAnual,
+    costoMensual: costoAnual / 12,
+    baseSalarial: sumaPond(fs, "baseSalarial") / 12,
+    auxTransporte: sumaPond(fs, "auxTransporte") / 12,
+    seguridadSocial: sumaPond(fs, "seguridadSocial") / 12,
+    prestaciones: sumaPond(fs, "prestaciones") / 12,
+    salarioPromedio: headcount > 0 ? fs.reduce((s, f) => s + f.baseSalarial, 0) / headcount : 0,
   };
 }
 
@@ -54,12 +145,18 @@ export interface FilaGrupo {
   headcount: number;
 }
 
-/** Agrupa el costo mensual y el headcount por una dimensión, desc. */
+/** Agrupa el costo mensual promedio y el headcount por una dimensión, desc. */
 async function porDimension(anio: number, by: "empresa" | "proceso" | "ciudad" | "tipoContrato"): Promise<FilaGrupo[]> {
-  const grupos = await prisma.nomina.groupBy({ by: [by], where: { anio }, _count: true, _sum: { total: true } });
-  return grupos
-    .map((g) => ({ label: (g[by] as string) || "N/D", costoMensual: g._sum.total?.toNumber() ?? 0, headcount: g._count }))
-    .sort((a, b) => b.costoMensual - a.costoMensual);
+  const fs = await filasAnio(anio);
+  const m = new Map<string, FilaGrupo>();
+  for (const f of fs) {
+    const label = f[by] || "N/D";
+    const g = m.get(label) ?? { label, costoMensual: 0, headcount: 0 };
+    g.costoMensual += (f.total * f.meses) / 12;
+    g.headcount += 1;
+    m.set(label, g);
+  }
+  return [...m.values()].sort((a, b) => b.costoMensual - a.costoMensual);
 }
 
 export const porEmpresa = (anio: number) => porDimension(anio, "empresa");
@@ -74,7 +171,7 @@ export interface ComposicionCosto {
   prestaciones: number;
 }
 
-/** Composición del costo total: salario + auxilio + aportes patronales + provisiones. */
+/** Composición del costo mensual promedio: salario + auxilio + aportes patronales + provisiones. */
 export async function composicionCosto(anio: number): Promise<ComposicionCosto> {
   const r = await resumenAnual(anio);
   return {
@@ -116,38 +213,27 @@ export interface EmpleadoNomina {
   prestaciones: number;
   total: number;
   tipoContrato: string;
+  fechaIngreso: Date | null;
+  fechaRetiro: Date | null;
+  activo: boolean;
 }
 
-/** Listado detallado de empleados del año, con filtro opcional por texto. */
-export async function empleados(anio: number, q?: string): Promise<EmpleadoNomina[]> {
-  const term = q?.trim();
-  const where: Prisma.NominaWhereInput = {
-    anio,
-    ...(term
-      ? {
-          OR: [
-            { nombre: { contains: term, mode: "insensitive" } },
-            { cargo: { contains: term, mode: "insensitive" } },
-            { proceso: { contains: term, mode: "insensitive" } },
-            { empresa: { contains: term, mode: "insensitive" } },
-            { ciudad: { contains: term, mode: "insensitive" } },
-            { cedula: { contains: term } },
-          ],
-        }
-      : {}),
-  };
-  const filas = await prisma.nomina.findMany({ where, orderBy: [{ total: "desc" }] });
-  return filas.map((f) => ({
-    cedula: f.cedula,
-    nombre: f.nombre,
-    proceso: f.proceso,
-    cargo: f.cargo,
-    empresa: f.empresa,
-    ciudad: f.ciudad,
-    baseSalarial: f.baseSalarial.toNumber(),
-    seguridadSocial: f.seguridadSocial.toNumber(),
-    prestaciones: f.prestaciones.toNumber(),
-    total: f.total.toNumber(),
-    tipoContrato: f.tipoContrato,
-  }));
+export type EstadoEmpleado = "activos" | "retirados" | "todos";
+
+/**
+ * Listado detallado de empleados del año, con filtro opcional por texto y por
+ * estado. Por defecto solo el personal ACTIVO hoy (sin retiro, o con retiro futuro).
+ */
+export async function empleados(anio: number, q?: string, estado: EstadoEmpleado = "activos"): Promise<EmpleadoNomina[]> {
+  const term = q?.trim().toLowerCase();
+  const fs = await filasAnio(anio);
+  return fs
+    .filter((f) => (estado === "todos" ? true : estado === "activos" ? f.activo : !f.activo))
+    .filter((f) => !term || [f.nombre, f.cargo, f.proceso, f.empresa, f.ciudad].some((x) => x.toLowerCase().includes(term)) || f.cedula.includes(term))
+    .sort((a, b) => b.total - a.total)
+    .map((f) => ({
+      cedula: f.cedula, nombre: f.nombre, proceso: f.proceso, cargo: f.cargo, empresa: f.empresa, ciudad: f.ciudad,
+      baseSalarial: f.baseSalarial, seguridadSocial: f.seguridadSocial, prestaciones: f.prestaciones, total: f.total,
+      tipoContrato: f.tipoContrato, fechaIngreso: f.fechaIngreso, fechaRetiro: f.fechaRetiro, activo: f.activo,
+    }));
 }

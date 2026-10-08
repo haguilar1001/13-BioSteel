@@ -6,6 +6,7 @@
 import "server-only";
 import { prisma } from "@/lib/db";
 import { Prisma } from "@prisma/client";
+import { formatFechaSello } from "@/lib/format";
 import type { EstadoInventario, TipoItemInventario, TipoNovedad } from "@prisma/client";
 
 // ---------- Etiquetas y estilos ----------
@@ -301,14 +302,9 @@ export function consecutivoNovedad(id: number): string {
   return `NOV-${String(id).padStart(5, "0")}`;
 }
 
-/** ¿La fecha cae en el día de hoy (hora local del servidor)? */
+/** ¿La fecha cae en el día de hoy EN COLOMBIA? (el servidor corre en UTC) */
 export function esHoy(fecha: Date): boolean {
-  const h = new Date();
-  return (
-    fecha.getFullYear() === h.getFullYear() &&
-    fecha.getMonth() === h.getMonth() &&
-    fecha.getDate() === h.getDate()
-  );
+  return formatFechaSello(fecha) === formatFechaSello(new Date());
 }
 
 /** Bitácora de novedades, más reciente primero. */
@@ -447,9 +443,10 @@ export async function soporteNovedad(id: number): Promise<SoporteNovedad | null>
 
 /** Soportes de todas las novedades registradas HOY (para exportar el día completo). */
 export async function soportesDeHoy(): Promise<SoporteNovedad[]> {
-  const hoy = new Date();
-  const desde = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate(), 0, 0, 0, 0);
-  const hasta = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 1, 0, 0, 0, 0);
+  // El día de hoy en Colombia (UTC−5): de 00:00 a 24:00 hora de Bogotá, no del servidor.
+  const [dd, mm, aaaa] = formatFechaSello(new Date()).split("/").map(Number) as [number, number, number];
+  const desde = new Date(Date.UTC(aaaa, mm - 1, dd, 5));
+  const hasta = new Date(Date.UTC(aaaa, mm - 1, dd + 1, 5));
   const novedades = await prisma.novedadInventario.findMany({
     where: { fecha: { gte: desde, lt: hasta } },
     orderBy: [{ fecha: "asc" }, { id: "asc" }],

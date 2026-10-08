@@ -362,7 +362,8 @@ export const CARGAS: CargaDef[] = [
         titulo: "Capacitaciones · Consolidado", archivo: nombre, hoja: p.hoja,
         filas: p.filas, cargadas, omitidas: p.omitidas,
         estrategia: `reemplaza ${p.periodos.length} periodo(s) [${p.periodos[0]} … ${p.periodos[p.periodos.length - 1]}]: ` +
-          `${nf.format(cargadas)} registro(s) · ${p.capacitaciones} capacitación(es) · ${colaboradores} colaborador(es)`,
+          `${nf.format(cargadas)} registro(s) · ${p.capacitaciones} capacitación(es) · ${colaboradores} colaborador(es)` +
+          (p.cronograma.length ? ` · cronograma: ${p.cronograma.length} capacitación(es) con su detalle` : ""),
       };
     },
   },

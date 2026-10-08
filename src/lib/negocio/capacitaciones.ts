@@ -189,6 +189,85 @@ export function porColaborador(rs: Registro[]): FilaColaborador[] {
     .sort((a, b) => a.promedio - b.promedio);
 }
 
+// ---------- Detalle de cada capacitación (cronograma + participantes) ----------
+
+export interface DetalleCapacitacion {
+  mes: number;
+  dia: number | null;
+  capacitacion: string;
+  objetivo: string;
+  dirigidoA: string;
+  dirigidoPor: string;
+  modalidad: string;
+  estado: string;
+  evaluados: number;
+  /** Promedios 0–100; null = todavía sin evaluar. */
+  pre: number | null;
+  post: number | null;
+  final: number | null;
+  observaciones: string;
+  /** Resultado de cada colaborador en esta capacitación (de mayor a menor mejora). */
+  participantes: Registro[];
+  /** false = la capacitación está en el consolidado pero no en el cronograma cargado. */
+  enCronograma: boolean;
+}
+
+/** Llave para cruzar cronograma y consolidado: sin tildes, mayúsculas ni espacios de más. */
+export function claveCapacitacion(nombre: string): string {
+  return nombre.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+const aNum = (d: { toNumber(): number } | null): number | null => (d == null ? null : d.toNumber());
+
+/**
+ * Una fila por capacitación con todo su detalle. Parte del CRONOGRAMA (que trae
+ * también las programadas) y le cuelga los resultados de cada colaborador; lo
+ * que esté en el consolidado y no en el cronograma se agrega al final del mes
+ * con los promedios calculados, para que nada desaparezca de la pantalla.
+ * `rs` ya viene recortado por el filtro de mes; `mes` recorta el cronograma igual.
+ */
+export async function detalleCapacitaciones(anio: number, rs: Registro[], mes?: number): Promise<DetalleCapacitacion[]> {
+  const cron = await prisma.capacitacionCronograma.findMany({ where: { anio, ...(mes ? { mes } : {}) } });
+  const usados = new Set<string>();
+  const llave = (m: number, nombre: string) => `${m}|${claveCapacitacion(nombre)}`;
+
+  const deCronograma: DetalleCapacitacion[] = cron.map((c) => {
+    const k = llave(c.mes, c.capacitacion);
+    usados.add(k);
+    const participantes = rs.filter((r) => llave(r.mes, r.capacitacion) === k);
+    return {
+      mes: c.mes, dia: c.dia, capacitacion: c.capacitacion,
+      objetivo: c.objetivo, dirigidoA: c.dirigidoA, dirigidoPor: c.dirigidoPor, modalidad: c.modalidad,
+      estado: c.estado,
+      evaluados: c.evaluados || participantes.length,
+      pre: aNum(c.promedioPre) ?? (participantes.length ? prom(participantes.map((r) => r.pre)) : null),
+      post: aNum(c.promedioPost) ?? (participantes.length ? prom(participantes.map((r) => r.post)) : null),
+      final: aNum(c.promedioFinal) ?? (participantes.length ? prom(participantes.map((r) => r.final)) : null),
+      observaciones: c.observaciones,
+      participantes: participantes.sort((a, b) => (b.post - b.pre) - (a.post - a.pre) || a.colaborador.localeCompare(b.colaborador)),
+      enCronograma: true,
+    };
+  });
+
+  const sueltas = new Map<string, Registro[]>();
+  for (const r of rs) {
+    const k = llave(r.mes, r.capacitacion);
+    if (usados.has(k)) continue;
+    sueltas.set(k, [...(sueltas.get(k) ?? []), r]);
+  }
+  const deConsolidado: DetalleCapacitacion[] = [...sueltas.values()].map((ps) => ({
+    mes: ps[0]!.mes, dia: null, capacitacion: ps[0]!.capacitacion,
+    objetivo: "", dirigidoA: "", dirigidoPor: "", modalidad: "", estado: "Ejecutada",
+    evaluados: ps.length,
+    pre: prom(ps.map((r) => r.pre)), post: prom(ps.map((r) => r.post)), final: prom(ps.map((r) => r.final)),
+    observaciones: "", participantes: ps, enCronograma: false,
+  }));
+
+  return [...deCronograma, ...deConsolidado].sort(
+    (a, b) => a.mes - b.mes || (a.dia ?? 99) - (b.dia ?? 99) || a.capacitacion.localeCompare(b.capacitacion),
+  );
+}
+
 export interface FilaNivel { nivel: (typeof NIVELES)[number]; cantidad: number }
 
 /** Cuántos registros cayeron en cada nivel de desempeño. */

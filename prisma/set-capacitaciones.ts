@@ -17,12 +17,12 @@
 import "./_env";
 import fs from "node:fs";
 import { PrismaClient } from "@prisma/client";
-import { parseCapacitaciones } from "../src/lib/negocio/importar-capacitaciones";
+import { parseCapacitaciones, persistirCronograma } from "../src/lib/negocio/importar-capacitaciones";
 
 const prisma = new PrismaClient();
 
 const ARCHIVO = process.env.ARCHIVO_CAPACITACIONES
-  ?? "D:/Escritorio/CONSOLIDADO DE CAPACITACIONES I SEMESTRE 2026 (1).xlsx";
+  ?? "D:/Escritorio/CONSOLIDADO_DE_CAPACITACIONES_2026.xlsx";
 
 /** Plan de formación I semestre 2026 (informe de indicadores de Gestión Humana). */
 const PLAN_2026: Record<number, number> = { 1: 3, 2: 2, 3: 5, 4: 3, 5: 4, 6: 2 };
@@ -41,6 +41,9 @@ async function main() {
   }
   const res = await prisma.capacitacion.createMany({ data: p.datos, skipDuplicates: true });
   console.log(`   ✓ ${res.count} registro(s) en ${p.periodos.length} periodo(s): ${p.periodos.join(", ")}`);
+
+  const nCrono = await persistirCronograma(p);
+  console.log(`   ✓ cronograma: ${nCrono} capacitación(es) con su detalle`);
 
   // Plan de formación: solo los meses que aún no lo tienen.
   const anio = p.datos[0]!.anio;

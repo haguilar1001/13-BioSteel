@@ -367,6 +367,21 @@ h1, h2, h3 { margin: 0; }
 .cons-det > summary:hover { background: var(--surface-2, #f6f8fc); }
 .cons-chev { display: inline-block; width: 14px; transition: transform .12s; color: var(--muted); }
 .cons-det[open] > summary .cons-chev { transform: rotate(90deg); }
+/* Capacitaciones: fila resumen de cada capacitación + ficha desplegable. */
+.cap-fila { display: grid; grid-template-columns: 18px 92px 38px minmax(200px, 1fr) 96px 78px 84px 84px 90px; gap: 8px; align-items: center; padding: 9px 14px; font-size: 13px; }
+.cap-fila .r { text-align: right; }
+.cap-cab { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; border-bottom: 1px solid var(--line); background: var(--surface-2, #f6f8fc); }
+.cap-ficha { padding: 4px 14px 14px 40px; background: var(--surface-2, #f6f8fc); border-top: 1px dashed var(--line); }
+.cap-datos { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px 18px; margin: 10px 0 12px; }
+.cap-datos .full { grid-column: 1 / -1; }
+.cap-datos dt { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; }
+.cap-datos dd { margin: 2px 0 0; font-size: 13px; line-height: 1.45; }
+@media (max-width: 900px) {
+  .cap-cab { display: none; }
+  .cap-fila { grid-template-columns: 18px 1fr auto auto; }
+  .cap-fila > :nth-child(2), .cap-fila > :nth-child(3), .cap-fila > :nth-child(6), .cap-fila > :nth-child(7), .cap-fila > :nth-child(8) { display: none; }
+  .cap-ficha { padding-left: 14px; }
+}
 /* Toggle de montos completos/resumidos (data-montos en <html>). */
 .monto-short { display: none; }
 :root[data-montos="resumido"] .monto-full { display: none; }

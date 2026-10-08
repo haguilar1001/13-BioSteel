@@ -5,7 +5,7 @@
 // ==========================================================
 import { requirePermiso, requireUsuario } from "@/server/auth-context";
 import { puede } from "@/lib/rbac/authorize";
-import { formatNumero, formatFechaSello } from "@/lib/format";
+import { formatNumero, formatFechaSello, formatFecha } from "@/lib/format";
 import {
   listarNovedades, listarEquipos, catalogos, novedadLabel, novedadIcono, estadoLabel, estadoClase, esHoy,
 } from "@/lib/negocio/inventario";
@@ -104,7 +104,7 @@ export default async function NovedadesPage() {
                     {n.tipo === "traslado" && n.sedeOrigen && n.sedeDestino
                       ? <>{n.sedeOrigen} → <strong>{n.sedeDestino}</strong></>
                       : (n.descripcion ?? "—")}
-                    {n.fechaCompraOriginal && <div>Fecha de compra: {formatFechaSello(n.fechaCompraOriginal)}</div>}
+                    {n.fechaCompraOriginal && <div>Fecha de compra: {formatFecha(n.fechaCompraOriginal)}</div>}
                   </td>
                   <td>
                     {n.estadoNuevo

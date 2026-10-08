@@ -10,7 +10,18 @@ import { prisma } from "@/lib/db";
 import { requireUsuario } from "@/server/auth-context";
 import { exigirPermiso } from "@/lib/rbac/authorize";
 import { prefijoCodigo, formatCodigo, siguienteNumero } from "@/lib/inventario-codigo";
+import { notificarTraslado } from "@/lib/notificaciones/traslado";
 import type { EstadoInventario, TipoNovedad, Prisma } from "@prisma/client";
+
+/**
+ * Fecha elegida en un <input type="date"> ("2026-10-01") → instante a MEDIODÍA UTC.
+ * `new Date("2026-10-01")` cae a medianoche UTC = 7 p. m. del día anterior en
+ * Colombia, y los soportes salían con fecha de ayer. A mediodía UTC (7 a. m.
+ * Colombia) el día es el mismo en Colombia y en UTC.
+ */
+function fechaDia(valor: string): Date {
+  return new Date(`${valor.slice(0, 10)}T12:00:00Z`);
+}
 
 /** Genera el siguiente código de inventario para una categoría (MOT-001…). */
 async function generarCodigo(client: Prisma.TransactionClient, categoriaUpper: string): Promise<string> {
@@ -230,7 +241,7 @@ export async function crearEquipoCompraAction(_prev: AccionState, fd: FormData):
         estadoNuevo: "activo",
         descripcion: descripcion || "Compra de equipo nuevo",
         usuarioId: g.usuarioId,
-        ...(fecha ? { fecha: new Date(fecha) } : {}),
+        ...(fecha ? { fecha: fechaDia(fecha) } : {}),
       },
     });
   });
@@ -298,7 +309,7 @@ export async function crearEquipoIngresoExistenteAction(_prev: AccionState, fd: 
         estadoNuevo: "activo",
         descripcion: descripcion || "Ingreso de equipo existente",
         usuarioId: g.usuarioId,
-        fecha: new Date(fechaIngreso),
+        fecha: fechaDia(fechaIngreso),
         fechaCompraOriginal: fechaCompra ? new Date(fechaCompra) : null,
       },
     });
@@ -354,8 +365,8 @@ export async function registrarNovedadAction(_prev: AccionState, fd: FormData): 
   if (itemId && !item) return { error: "El ítem no pertenece al equipo." };
   const estadoAnterior: EstadoInventario | null = item ? item.estado : null;
 
-  await prisma.$transaction(async (tx) => {
-    await tx.novedadInventario.create({
+  const novedadId = await prisma.$transaction(async (tx) => {
+    const nov = await tx.novedadInventario.create({
       data: {
         tipo,
         equipoId,
@@ -366,7 +377,7 @@ export async function registrarNovedadAction(_prev: AccionState, fd: FormData): 
         estadoNuevo: nuevoEstado,
         descripcion: descripcion || null,
         usuarioId: g.usuarioId,
-        ...(fecha ? { fecha: new Date(fecha) } : {}),
+        ...(fecha ? { fecha: fechaDia(fecha) } : {}),
       },
     });
 
@@ -381,7 +392,12 @@ export async function registrarNovedadAction(_prev: AccionState, fd: FormData): 
         if (tipo === "retorno_reparacion") await tx.equipoInventario.update({ where: { id: equipoId }, data: { activo: true } });
       }
     }
+    return nov.id;
   });
+
+  // Traslado entre sedes: se avisa por correo con la remisión adjunta. Va después
+  // de guardar y no puede tumbar el registro (notificarTraslado nunca lanza).
+  if (tipo === "traslado") await notificarTraslado(novedadId);
 
   refresh();
   return { ok: true };

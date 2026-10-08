@@ -2,7 +2,7 @@
 // Hoja de un soporte de novedad de inventario (marca BioSteel).
 // Server component puro: recibe los datos ya resueltos.
 // ==========================================================
-import { formatFechaHoraSeg, formatNumero, formatFechaSello } from "@/lib/format";
+import { formatFechaHoraSeg, formatNumero, formatFechaSello, formatFecha } from "@/lib/format";
 import {
   novedadLabel, novedadIcono, estadoLabel, tipoLabel, type SoporteNovedad, type ItemSoporte,
 } from "@/lib/negocio/inventario";
@@ -86,7 +86,7 @@ export default function SoporteDoc({ s }: { s: SoporteNovedad }) {
             <Campo k="Tipo de novedad" v={`${novedadIcono(s.tipo)} ${novedadLabel(s.tipo)}`} big />
             <Campo k={s.tipo === "ingreso_existente" ? "Fecha de ingreso al inventario" : "Fecha de la novedad"} v={formatFechaSello(s.fecha)} big />
             {s.fechaCompraOriginal && (
-              <Campo k="Fecha de compra original" v={formatFechaSello(s.fechaCompraOriginal)} />
+              <Campo k="Fecha de compra original" v={formatFecha(s.fechaCompraOriginal)} />
             )}
             {cambiaEstado && (
               <Campo

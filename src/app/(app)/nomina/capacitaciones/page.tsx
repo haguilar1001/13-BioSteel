@@ -18,7 +18,7 @@ import { LineasMensuales } from "../../_components/charts/LineasMensuales";
 import { TopRanking } from "../../_components/charts/TopRanking";
 import {
   aniosConCapacitaciones, registros, resumen, porMes, porCapacitacion,
-  porColaborador, distribucion, ejecucion, nivelDe, nivelMejora,
+  porColaborador, distribucion, ejecucion, nivelDe, nivelMejora, detalleCapacitaciones,
   META_EJECUCION, META_EFICACIA, MES_CORTO, MES_LARGO,
 } from "@/lib/negocio/capacitaciones";
 
@@ -33,7 +33,7 @@ const COLOR_NIVEL: Record<string, string> = {
   critico: "var(--bad, #D64545)",
 };
 
-interface Params { anio?: string; mes?: string; cap?: string }
+interface Params { anio?: string; mes?: string }
 
 export default async function CapacitacionesPage({ searchParams }: { searchParams: Promise<Params> }) {
   await requirePermiso("capacitaciones.view");
@@ -65,16 +65,8 @@ export default async function CapacitacionesPage({ searchParams }: { searchParam
   const dist = distribucion(rs);
   const filasEjecucion = await ejecucion(anio, todos);
 
-  // El detalle se puede recortar a una capacitación con un clic.
-  const capFiltro = sp.cap && caps.some((c) => c.capacitacion === sp.cap) ? sp.cap : undefined;
-  const detalle = capFiltro ? rs.filter((r) => r.capacitacion === capFiltro) : rs;
-
-  const qs = (cap?: string) => {
-    const p = new URLSearchParams({ anio: String(anio) });
-    if (mes) p.set("mes", String(mes));
-    if (cap) p.set("cap", cap);
-    return `?${p.toString()}`;
-  };
+  // Cada capacitación con su detalle (cronograma) y los resultados de sus participantes.
+  const detalleCaps = await detalleCapacitaciones(anio, rs, mes);
 
   const etiqueta = mes ? `${MES_LARGO[mes]} ${anio}` : String(anio);
   const primero = mesesConDatos[0];
@@ -288,53 +280,97 @@ export default async function CapacitacionesPage({ searchParams }: { searchParam
         />
       </div>
 
-      {/* Detalle fila por fila. */}
+      {/* Detalle por capacitación: cada una se despliega con su ficha y los
+          resultados de cada colaborador. */}
       <div className="card">
         <div className="chart-head">
-          Detalle por colaborador y capacitación
-          <span className="hact">nivel por mejora (post − pre) · {formatNumero(detalle.length)} registro(s)</span>
+          Detalle por capacitación
+          <span className="hact">{formatNumero(detalleCaps.length)} capacitación(es) · haz clic en una para ver su ficha y a cada colaborador</span>
         </div>
-        <div className="card-body">
-          <div className="toolbar" style={{ marginBottom: 10, flexWrap: "wrap", gap: 6 }}>
-            <a href={qs()} className={`btn${capFiltro ? "" : " primary"}`}>Todas</a>
-            {caps.map((c) => (
-              <a key={c.capacitacion} href={qs(c.capacitacion)}
-                className={`btn${capFiltro === c.capacitacion ? " primary" : ""}`} style={{ fontSize: 12 }}>
-                {c.capacitacion}
-              </a>
-            ))}
-          </div>
-          <div className="tbl-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Mes</th><th>Capacitación</th><th>Colaborador</th>
-                  <th className="r">Pre</th><th className="r">Post</th><th className="r">Mejora</th>
-                  <th className="r">% final</th><th>Nivel</th>
-                </tr>
-              </thead>
-              <tbody>
-                {detalle.map((r) => {
-                  // El nivel de la fila mide cuánto SUBIÓ, no qué tan alto
-                  // quedó: por eso sale de la mejora y no del % final.
-                  const mejora = r.post - r.pre;
-                  const n = nivelMejora(mejora);
-                  return (
-                    <tr key={r.id}>
-                      <td>{MES_LARGO[r.mes]}</td>
-                      <td>{r.capacitacion}</td>
-                      <td>{r.colaborador}</td>
-                      <td className="r num">{pct(r.pre)}</td>
-                      <td className="r num">{pct(r.post)}</td>
-                      <td className="r num">{pts(mejora)} pts</td>
-                      <td className="r num" style={{ fontWeight: 700 }}>{pct(r.final)}</td>
-                      <td><span className={`tag ${n.clase}`}>{n.label}</span></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+        <div className="card-body" style={{ padding: 0 }}>
+          {detalleCaps.length === 0 ? (
+            <div className="empty">Sin capacitaciones en el periodo.</div>
+          ) : (
+            <>
+              <div className="cap-fila cap-cab" aria-hidden="true">
+                <span />
+                <span>Mes</span>
+                <span>Día</span>
+                <span>Capacitación</span>
+                <span>Estado</span>
+                <span className="r">Evaluados</span>
+                <span className="r">Prom. pre</span>
+                <span className="r">Prom. post</span>
+                <span className="r">Prom. final</span>
+              </div>
+              {detalleCaps.map((d) => (
+                <details key={`${d.mes}-${d.capacitacion}`} className="cons-det cap-det">
+                  <summary className="cap-fila">
+                    <span className="cons-chev">▸</span>
+                    <span>{MES_LARGO[d.mes]}</span>
+                    <span>{d.dia ?? "—"}</span>
+                    <span style={{ fontWeight: 600 }}>{d.capacitacion}</span>
+                    <span>
+                      <span className={`tag ${d.estado.toLowerCase().startsWith("ejec") ? "t-ok" : "t-blue"}`}>{d.estado || "—"}</span>
+                    </span>
+                    <span className="r num">{formatNumero(d.evaluados)}</span>
+                    <span className="r num">{d.pre == null ? "—" : pct(d.pre)}</span>
+                    <span className="r num">{d.post == null ? "—" : pct(d.post)}</span>
+                    <span className="r num" style={{ fontWeight: 700 }}>{d.final == null ? "—" : pct(d.final)}</span>
+                  </summary>
+
+                  <div className="cap-ficha">
+                    <dl className="cap-datos">
+                      <div className="full"><dt>Objetivo</dt><dd>{d.objetivo || "—"}</dd></div>
+                      <div><dt>Dirigido a</dt><dd>{d.dirigidoA || "—"}</dd></div>
+                      <div><dt>Dirigido por</dt><dd>{d.dirigidoPor || "—"}</dd></div>
+                      <div><dt>Modalidad</dt><dd>{d.modalidad || "—"}</dd></div>
+                      {d.observaciones && <div className="full"><dt>Observaciones</dt><dd>{d.observaciones}</dd></div>}
+                    </dl>
+                    {!d.enCronograma && (
+                      <p className="flag" style={{ margin: "0 0 8px" }}>
+                        Esta capacitación está en el consolidado pero no en el cronograma cargado: faltan fecha, objetivo y demás datos.
+                      </p>
+                    )}
+
+                    {d.participantes.length === 0 ? (
+                      <div className="empty" style={{ padding: 12 }}>Sin evaluaciones registradas para esta capacitación.</div>
+                    ) : (
+                      <div className="tbl-wrap">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Colaborador</th>
+                              <th className="r">Pre</th><th className="r">Post</th><th className="r">Mejora</th>
+                              <th className="r">% final</th><th>Nivel</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {d.participantes.map((r) => {
+                              // El nivel de la fila mide cuánto SUBIÓ, no qué tan alto
+                              // quedó: por eso sale de la mejora y no del % final.
+                              const mejora = r.post - r.pre;
+                              const n = nivelMejora(mejora);
+                              return (
+                                <tr key={r.id}>
+                                  <td>{r.colaborador}</td>
+                                  <td className="r num">{pct(r.pre)}</td>
+                                  <td className="r num">{pct(r.post)}</td>
+                                  <td className="r num">{pts(mejora)} pts</td>
+                                  <td className="r num" style={{ fontWeight: 700 }}>{pct(r.final)}</td>
+                                  <td><span className={`tag ${n.clase}`}>{n.label}</span></td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </details>
+              ))}
+            </>
+          )}
         </div>
       </div>
     </>

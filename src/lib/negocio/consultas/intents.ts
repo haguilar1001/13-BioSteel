@@ -349,7 +349,7 @@ const nominaResumen: Intent = {
     return {
       ok: true,
       titulo: `Nómina · ${anio}`,
-      resumen: `En ${anio} la planta es de ${formatNumero(k.headcount)} empleados con un costo mensual de ${formatCOP(k.costoMensual)} (anual ${formatCOP(k.costoAnual)}). Salario promedio ${formatCOP(k.salarioPromedio)}.`,
+      resumen: `En ${anio} la planta fue de ${formatNumero(k.headcount)} empleados (${formatNumero(k.activos)} activos hoy y ${formatNumero(k.retirados)} retirados) con un costo mensual promedio de ${formatCOP(k.costoMensual)} (anual ${formatCOP(k.costoAnual)}, según el tiempo activo de cada uno). Salario promedio ${formatCOP(k.salarioPromedio)}.`,
       kpis: [
         { label: "Empleados", valor: k.headcount, tipo: "numero" },
         { label: "Costo mensual", valor: k.costoMensual, tipo: "monto" },

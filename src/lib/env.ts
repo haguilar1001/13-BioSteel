@@ -41,6 +41,9 @@ const schema = z.object({
   //   María Angélica Parejo     -> cooradministrativa@biosteeldecolombia.com (coordinación administrativa)
   NOTIF_EMAILS: z.string().default("alejandro.aguilar@biosteeldecolombia.com,cooradministrativa@biosteeldecolombia.com"),
   NOTIF_DIAS_ANTES: z.coerce.number().default(5),
+  // Correos EXTRA (separados por coma) que reciben el aviso de traslados de equipos,
+  // además de los usuarios de la sede de origen/destino y quien registra el traslado.
+  INVENTARIO_NOTIF_EMAILS: z.string().optional(),
 });
 
 const parsed = schema.safeParse(process.env);

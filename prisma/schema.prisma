@@ -893,6 +893,11 @@ model Nomina {
   prestaciones    Decimal  @db.Decimal(18, 2) // provisiones (subtotal)
   total           Decimal  @db.Decimal(18, 2) // costo mensual total
   tipoContrato    String
+  /// FECHA INGRESO del Excel (null si no viene). Marca desde cuándo cuenta el costo.
+  fechaIngreso    DateTime? @db.Date
+  /// FECHA RETIRO del Excel. null = "No aplica" (sigue activo). Puede ser FUTURA
+  /// (fin de un contrato a término fijo): activo = sin retiro o retiro >= hoy.
+  fechaRetiro     DateTime? @db.Date
   createdAt       DateTime @default(now())
 
   @@unique([anio, cedula])
@@ -933,6 +938,32 @@ model Capacitacion {
   @@index([anio, mes])
   @@index([colaborador])
   @@index([capacitacion])
+}
+
+// Cronograma de formación (hoja CRONOGRAMA del consolidado, FOR-GH-031): una fila
+// por capacitación, con fecha, objetivo, a quién va dirigida, quién la dicta, la
+// modalidad, el estado y los promedios. Incluye las PROGRAMADAS (aún sin
+// evaluaciones), que no existen en `Capacitacion`. Se cruza con esta por
+// mes + nombre. Los promedios van tal cual el archivo (0–100); null = sin evaluar.
+model CapacitacionCronograma {
+  id            Int      @id @default(autoincrement())
+  anio          Int
+  mes           Int // 1–12
+  dia           Int?
+  capacitacion  String
+  objetivo      String   @default("")
+  dirigidoA     String   @default("")
+  dirigidoPor   String   @default("")
+  modalidad     String   @default("")
+  estado        String   @default("")
+  evaluados     Int      @default(0)
+  promedioPre   Decimal? @db.Decimal(6, 2)
+  promedioPost  Decimal? @db.Decimal(6, 2)
+  promedioFinal Decimal? @db.Decimal(6, 2)
+  observaciones String   @default("")
+
+  @@unique([anio, mes, capacitacion])
+  @@index([anio, mes])
 }
 
 // Plan de formación: cuántas capacitaciones se planearon para el mes. Es el

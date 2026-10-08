@@ -18,11 +18,12 @@ import * as XLSX from "xlsx";
 // 7 CIUDAD · 8 BASE SALARIAL · 9 AUX TRANSPORTE · 10 NO PRESTACIONAL ·
 // 11 TOTAL DEVENGADO · 12 SALUD · 13 PENSION · 14 ARL · 15 SENA · 16 ICBF ·
 // 17 CAJA · 18 SEGURIDAD SOCIAL · 19 CESANTIAS · 20 INT CESANTIAS · 21 PRIMA ·
-// 22 VACACIONES · 23 PRESTACIONES SOCIALES · 24 TOTAL · 25 TIPO DE CONTRATO
+// 22 VACACIONES · 23 PRESTACIONES SOCIALES · 24 TOTAL · 25 TIPO DE CONTRATO ·
+// 26 FECHA INGRESO · 27 FECHA RETIRO ("No aplica" = sigue activo)
 const C = {
   cedula: 2, nombre: 3, proceso: 4, cargo: 5, empresa: 6, ciudad: 7,
   base: 8, aux: 9, noPrest: 10, totalDev: 11, segSocial: 18,
-  prestaciones: 23, total: 24, contrato: 25,
+  prestaciones: 23, total: 24, contrato: 25, ingreso: 26, retiro: 27,
 } as const;
 
 const txt = (v: unknown): string => (v == null ? "" : String(v).trim());
@@ -38,12 +39,33 @@ function num(v: unknown): number {
   return 0;
 }
 
+/**
+ * Fecha del Excel → Date (día calendario, medianoche UTC) o null.
+ * Llega como serial de Excel, texto ISO / dd-mm-aaaa, o "No aplica". Se usa la
+ * parte entera del serial: la hora residual (":00:16") no cuenta.
+ */
+export function fechaExcel(v: unknown): Date | null {
+  if (v == null) return null;
+  if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : new Date(Date.UTC(v.getFullYear(), v.getMonth(), v.getDate()));
+  if (typeof v === "number") {
+    if (!Number.isFinite(v) || v < 1) return null;
+    return new Date(Date.UTC(1899, 11, 30) + Math.floor(v) * 86_400_000);
+  }
+  const s = String(v).trim();
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])));
+  const dmy = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
+  if (dmy) return new Date(Date.UTC(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1])));
+  return null; // "No aplica", vacío…
+}
+
 export interface FilaNomina {
   anio: number; cedula: string; nombre: string; proceso: string; cargo: string;
   empresa: string; ciudad: string;
   baseSalarial: number; auxTransporte: number; noPrestacional: number;
   totalDevengado: number; seguridadSocial: number; prestaciones: number;
   total: number; tipoContrato: string;
+  fechaIngreso: Date | null; fechaRetiro: Date | null;
 }
 
 export interface HojaNomina {
@@ -93,6 +115,7 @@ export function parseNomina(buffer: Buffer): NominaParsed {
         noPrestacional: num(r[C.noPrest]), totalDevengado: num(r[C.totalDev]),
         seguridadSocial: num(r[C.segSocial]), prestaciones: num(r[C.prestaciones]),
         total, tipoContrato: txt(r[C.contrato]) || "N/D",
+        fechaIngreso: fechaExcel(r[C.ingreso]), fechaRetiro: fechaExcel(r[C.retiro]),
       });
       empleados++;
       costoMensual += total;
@@ -130,6 +153,7 @@ export async function persistirNomina(p: NominaParsed): Promise<number> {
       noPrestacional: dec(f.noPrestacional), totalDevengado: dec(f.totalDevengado),
       seguridadSocial: dec(f.seguridadSocial), prestaciones: dec(f.prestaciones),
       total: dec(f.total), tipoContrato: f.tipoContrato,
+      fechaIngreso: f.fechaIngreso, fechaRetiro: f.fechaRetiro,
     };
     await prisma.nomina.upsert({
       where: { anio_cedula: { anio: f.anio, cedula: f.cedula } },

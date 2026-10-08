@@ -1,6 +1,7 @@
 // ==========================================================
-// Nómina · Resumen — costo de personal del año (solo BioSteel). KPIs (costo
-// mensual/anual, empleados, salario promedio) con su variación contra el año
+// Nómina · Resumen — costo de personal del año (solo BioSteel). El costo pondera
+// el tiempo activo de cada persona en el año (ingreso/retiro), retirados incluidos.
+// KPIs (costo mensual promedio/anual, empleados, salario promedio) con su variación contra el año
 // anterior, anillo por tipo de contrato,
 // composición del costo, ranking por proceso y por ciudad, y comparativo por
 // proceso vs año anterior. Selector de año.
@@ -52,7 +53,13 @@ export default async function NominaPage({ searchParams }: { searchParams: Promi
     <>
       <div className="card" style={{ marginBottom: 12 }}>
         <div className="card-body" style={{ paddingBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
-          <div className="eyebrow" style={{ fontSize: 15 }}>Costo de Personal · {anio}</div>
+          <div>
+            <div className="eyebrow" style={{ fontSize: 15 }}>Costo de Personal · {anio}</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3 }}>
+              Incluye a los colaboradores retirados, por el tiempo que estuvieron activos en {anio}
+              {kpi.retirados > 0 ? ` · ${formatNumero(kpi.activos)} activo(s) y ${formatNumero(kpi.retirados)} retirado(s)` : ""}
+            </div>
+          </div>
           <FiltroAuto className="toolbar">
             <label className="flag" style={{ alignSelf: "center" }}>Año:</label>
             <select name="anio" defaultValue={anio} className="select">
@@ -67,19 +74,20 @@ export default async function NominaPage({ searchParams }: { searchParams: Promi
           empleados no hay bueno ni malo y va en gris. */}
       <div className="kpis" style={{ marginBottom: 12 }}>
         <div className="kpi kc k-egreso">
-          <div className="klabel">Costo mensual</div>
+          <div className="klabel">Costo mensual (prom.)</div>
           <div className="kval num"><Monto value={kpi.costoMensual} /></div>
           <Variacion actual={kpi.costoMensual} anterior={kpiAnt?.costoMensual} anioAnt={anioAnt} plata />
         </div>
         <div className="kpi kc k-egreso">
-          <div className="klabel">Costo anual (×12)</div>
+          <div className="klabel">Costo anual {anio}</div>
           <div className="kval num"><Monto value={kpi.costoAnual} /></div>
           <Variacion actual={kpi.costoAnual} anterior={kpiAnt?.costoAnual} anioAnt={anioAnt} plata />
         </div>
         <div className="kpi kc">
-          <div className="klabel">Empleados</div>
+          <div className="klabel">Empleados en {anio}</div>
           <div className="kval num">{formatNumero(kpi.headcount)}</div>
           <Variacion actual={kpi.headcount} anterior={kpiAnt?.headcount} anioAnt={anioAnt} neutro sufijo=" empleado(s)" />
+          {kpi.retirados > 0 && <div className="ksub" style={{ color: "var(--muted)" }}>{formatNumero(kpi.activos)} activos · {formatNumero(kpi.retirados)} retirados</div>}
         </div>
         <div className="kpi kc k-w">
           <div className="klabel">Salario base prom.</div>

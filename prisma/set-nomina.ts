@@ -23,11 +23,12 @@ const RUTA = process.env.RUTA_NOMINA ?? "D:/Escritorio/Nomina.xlsx";
 // 7 CIUDAD · 8 BASE SALARIAL · 9 AUX TRANSPORTE · 10 NO PRESTACIONAL ·
 // 11 TOTAL DEVENGADO · 12 SALUD · 13 PENSION · 14 ARL · 15 SENA · 16 ICBF ·
 // 17 CAJA · 18 SEGURIDAD SOCIAL · 19 CESANTIAS · 20 INT CESANTIAS · 21 PRIMA ·
-// 22 VACACIONES · 23 PRESTACIONES SOCIALES · 24 TOTAL · 25 TIPO DE CONTRATO
+// 22 VACACIONES · 23 PRESTACIONES SOCIALES · 24 TOTAL · 25 TIPO DE CONTRATO ·
+// 26 FECHA INGRESO · 27 FECHA RETIRO ("No aplica" = sigue activo)
 const C = {
   cedula: 2, nombre: 3, proceso: 4, cargo: 5, empresa: 6, ciudad: 7,
   base: 8, aux: 9, noPrest: 10, totalDev: 11, segSocial: 18,
-  prestaciones: 23, total: 24, contrato: 25,
+  prestaciones: 23, total: 24, contrato: 25, ingreso: 26, retiro: 27,
 } as const;
 
 /** Número tolerante: acepta number, "1.234.567,89" o vacío → 0. */
@@ -40,6 +41,26 @@ function num(v: unknown): number {
     return Number(s.replace(/\./g, "").replace(",", ".")) || 0;
   }
   return 0;
+}
+
+/**
+ * Fecha del Excel → Date (día calendario, medianoche UTC) o null.
+ * Llega como serial de Excel, como texto ISO/dd-mm-aaaa o como "No aplica".
+ * Se lee la parte entera del serial: la hora residual (":00:16") no cuenta.
+ */
+function fecha(v: unknown): Date | null {
+  if (v == null) return null;
+  if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : new Date(Date.UTC(v.getFullYear(), v.getMonth(), v.getDate()));
+  if (typeof v === "number") {
+    if (!isFinite(v) || v < 1) return null;
+    return new Date(Date.UTC(1899, 11, 30) + Math.floor(v) * 86_400_000);
+  }
+  const s = String(v).trim();
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])));
+  const dmy = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
+  if (dmy) return new Date(Date.UTC(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1])));
+  return null; // "No aplica", vacío, etc.
 }
 
 function txt(v: unknown): string {
@@ -73,7 +94,7 @@ async function main() {
     const ws = wb.Sheets[hoja]!;
     const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: true, defval: null });
 
-    let n = 0, saltadas = 0, sumaTotal = 0;
+    let n = 0, saltadas = 0, sumaTotal = 0, conRetiro = 0;
     const vistos = new Set<string>(); // cédulas ya cargadas este año (evita choques de upsert)
 
     for (let i = 1; i < rows.length; i++) { // fila 0 = encabezado
@@ -103,6 +124,8 @@ async function main() {
         prestaciones: dec(num(r[C.prestaciones])),
         total: dec(total),
         tipoContrato: txt(r[C.contrato]) || "N/D",
+        fechaIngreso: fecha(r[C.ingreso]),
+        fechaRetiro: fecha(r[C.retiro]),
       };
 
       await prisma.nomina.upsert({
@@ -111,11 +134,12 @@ async function main() {
         create: { anio, cedula, ...data },
       });
       n++;
+      if (data.fechaRetiro) conRetiro++;
       sumaTotal += total;
     }
 
     totalFilas += n;
-    console.log(`   ✅ ${hoja}: ${n} empleados · costo mensual ${fmt(sumaTotal)} · costo anual ~${fmt(sumaTotal * 12)} (${saltadas} filas omitidas)`);
+    console.log(`   ✅ ${hoja}: ${n} empleados · costo mensual ${fmt(sumaTotal)} · costo anual ~${fmt(sumaTotal * 12)} (${conRetiro} con fecha de retiro, ${saltadas} filas omitidas)`);
   }
 
   console.log(`✅ Nómina importada (${totalFilas} registros).`);
