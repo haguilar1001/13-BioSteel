@@ -598,6 +598,67 @@ export async function detallePendientes(f: FiltroCompras, hoy: Date, limite = 50
   });
 }
 
+export interface OrdenPendiente {
+  nroOrden: string;
+  renglones: number;
+  unidades: number;
+  valorPendiente: number;
+  /** Entrega pactada más próxima de la orden (la más atrasada si hay varias). */
+  fechaEntrega: Date | null;
+  diasVencido: number | null;
+}
+
+export interface ProveedorPendiente {
+  proveedor: string;
+  ordenes: OrdenPendiente[];
+  renglones: number;
+  unidades: number;
+  valorPendiente: number;
+  /** Órdenes con atraso (días vencido > 0). */
+  ordenesVencidas: number;
+  valorVencido: number;
+  /** Mayor atraso entre sus órdenes; null si ninguna tiene fecha de entrega. */
+  maxDiasVencido: number | null;
+}
+
+/**
+ * Agrupa los renglones pendientes por PROVEEDOR y, dentro, por ORDEN: cuántas
+ * órdenes tiene pendientes cada proveedor, sin bajar al detalle de cada ítem.
+ * Una orden cuenta una sola vez aunque tenga muchos renglones. Ordena de mayor
+ * a menor valor pendiente.
+ */
+export function agruparPendientes(filas: DetallePendiente[]): ProveedorPendiente[] {
+  const provs = new Map<string, Map<string, OrdenPendiente>>();
+  for (const r of filas) {
+    const nombre = r.proveedor || "(sin proveedor)";
+    const ordenes = provs.get(nombre) ?? new Map<string, OrdenPendiente>();
+    const o = ordenes.get(r.nroOrden) ?? { nroOrden: r.nroOrden, renglones: 0, unidades: 0, valorPendiente: 0, fechaEntrega: null, diasVencido: null };
+    o.renglones++;
+    o.unidades += r.cantPendiente;
+    o.valorPendiente += r.valorPendiente;
+    if (r.fechaEntrega && (!o.fechaEntrega || r.fechaEntrega < o.fechaEntrega)) o.fechaEntrega = r.fechaEntrega;
+    if (r.diasVencido != null && (o.diasVencido == null || r.diasVencido > o.diasVencido)) o.diasVencido = r.diasVencido;
+    ordenes.set(r.nroOrden, o);
+    provs.set(nombre, ordenes);
+  }
+  return [...provs.entries()]
+    .map(([proveedor, m]) => {
+      const ordenes = [...m.values()].sort((a, b) => (b.diasVencido ?? -9999) - (a.diasVencido ?? -9999) || b.valorPendiente - a.valorPendiente);
+      const vencidas = ordenes.filter((o) => (o.diasVencido ?? 0) > 0);
+      const dias = ordenes.map((o) => o.diasVencido).filter((d): d is number => d != null);
+      return {
+        proveedor, ordenes,
+        renglones: ordenes.reduce((s, o) => s + o.renglones, 0),
+        unidades: ordenes.reduce((s, o) => s + o.unidades, 0),
+        valorPendiente: ordenes.reduce((s, o) => s + o.valorPendiente, 0),
+        ordenesVencidas: vencidas.length,
+        valorVencido: vencidas.reduce((s, o) => s + o.valorPendiente, 0),
+        maxDiasVencido: dias.length ? Math.max(...dias) : null,
+      };
+    })
+    .sort((a, b) => b.valorPendiente - a.valorPendiente);
+}
+
 export interface DetalleFactura {
   nroDocumento: string; fecha: Date; proveedor: string; doctoProveedor: string; claseDocto: string;
   estado: string; valorBruto: number; valorImptos: number; valorNeto: number;
