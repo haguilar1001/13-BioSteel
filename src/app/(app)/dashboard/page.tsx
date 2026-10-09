@@ -266,7 +266,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             <Donut
               azul
               valores
-              size={300}
+              lateral
+              size={260}
               data={lineasMes.map((l) => ({ label: nombreLinea(l.linea), valor: l.valor }))}
               centro={{ valor: formatCOP(totalLineasMes), valorCorto: formatCOPCorto(totalLineasMes), etiqueta: "venta neta" }}
             />

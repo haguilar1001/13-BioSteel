@@ -61,6 +61,7 @@ export function Donut({
   azul = false,
   agruparBajo = 1,
   valores = false,
+  lateral = false,
 }: {
   data: SegmentoDonut[];
   /**
@@ -75,6 +76,8 @@ export function Donut({
   agruparBajo?: number;
   /** En modo azul la leyenda solo trae %; con `valores` agrega también el monto. */
   valores?: boolean;
+  /** Leyenda al lado del anillo (en vez de debajo); en pantallas angostas vuelve a quedar debajo. */
+  lateral?: boolean;
 }) {
   const segs: Seg[] = azul
     ? segmentosAzules(data, agruparBajo)
@@ -116,7 +119,7 @@ export function Donut({
   });
 
   return (
-    <div ref={wrapRef} style={{ position: "relative", display: "flex", flexDirection: "column", gap: 16, alignItems: "center" }}>
+    <div ref={wrapRef} style={{ position: "relative", display: "flex", flexDirection: lateral ? "row" : "column", flexWrap: lateral ? "wrap" : "nowrap", justifyContent: lateral ? "center" : undefined, gap: lateral ? 28 : 16, alignItems: "center" }}>
       <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} style={{ maxWidth: "100%", flex: "0 0 auto" }}>
         {arcos.map(({ d, s, e }) =>
           e <= s ? null : (
@@ -148,7 +151,7 @@ export function Donut({
 
       {tip && <Tooltip tip={tip} total={total} />}
 
-      <div style={{ width: "100%", display: legend ? "flex" : "none", flexDirection: "column", gap: 2 }}>
+      <div style={{ width: lateral ? undefined : "100%", flex: lateral ? "1 1 340px" : undefined, maxWidth: lateral ? 520 : undefined, display: legend ? "flex" : "none", flexDirection: "column", gap: 2 }}>
         {segs.map((d) => (
           <div key={d.label} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, padding: "6px 4px", borderTop: "1px solid var(--line)" }}>
             <i style={{ width: 12, height: 12, borderRadius: 3, background: d.color, flex: "0 0 auto" }} />

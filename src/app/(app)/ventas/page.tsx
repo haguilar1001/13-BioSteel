@@ -258,7 +258,8 @@ export default async function VentasPage({ searchParams }: { searchParams: Promi
               <Donut
                 azul
                 valores
-                size={300}
+                lateral
+                size={260}
                 data={porLinea.filter((l) => l.valor > 0 && (!filtraLinea || linSel.includes(l.linea))).map((l) => ({ label: nombreLinea(l.linea), valor: l.valor }))}
                 centro={{ valor: formatCOP(filtraLinea ? kpi.venta : totalLineas), valorCorto: formatCOPCorto(filtraLinea ? kpi.venta : totalLineas), etiqueta: "venta neta" }}
               />
