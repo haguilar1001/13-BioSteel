@@ -185,23 +185,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               </div>
             </div>
           </div>
-
-          {lineasMes.length > 0 && (
-            <div className="card" style={{ marginBottom: 12 }}>
-              <div className="chart-head">
-                Venta por línea <span className="hact"><a href={`/ventas?anio=${ANIO}&mes=${mesActual}`} style={{ color: "#fff" }}>{MESES_FULL[mesActual]} {ANIO} · ver en Ventas →</a></span>
-              </div>
-              <div className="card-body" style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "center", justifyContent: "center" }}>
-                <Donut
-                  azul
-                  valores
-                  size={300}
-                  data={lineasMes.map((l) => ({ label: nombreLinea(l.linea), valor: l.valor }))}
-                  centro={{ valor: formatCOP(totalLineasMes), valorCorto: formatCOPCorto(totalLineasMes), etiqueta: "venta neta" }}
-                />
-              </div>
-            </div>
-          )}
         </>
       )}
 
@@ -272,6 +255,24 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </div>
         </div>
       </div>
+
+      {/* Venta por línea del mes en curso: después de las 12 tarjetas */}
+      {lineasMes.length > 0 && (
+        <div className="card" style={{ marginBottom: 12 }}>
+          <div className="chart-head">
+            Venta por línea <span className="hact"><a href={`/ventas?anio=${ANIO}&mes=${mesActual}`} style={{ color: "#fff" }}>{MESES_FULL[mesActual]} {ANIO} · ver en Ventas →</a></span>
+          </div>
+          <div className="card-body" style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "center", justifyContent: "center" }}>
+            <Donut
+              azul
+              valores
+              size={300}
+              data={lineasMes.map((l) => ({ label: nombreLinea(l.linea), valor: l.valor }))}
+              centro={{ valor: formatCOP(totalLineasMes), valorCorto: formatCOPCorto(totalLineasMes), etiqueta: "venta neta" }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Egresos por grupo + próximos pagos (izq.) · barras + anillo (der.) */}
       {verCxp && (
