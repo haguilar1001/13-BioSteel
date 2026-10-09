@@ -60,6 +60,7 @@ export function Donut({
   legend = true,
   azul = false,
   agruparBajo = 1,
+  valores = false,
 }: {
   data: SegmentoDonut[];
   /**
@@ -72,6 +73,8 @@ export function Donut({
   legend?: boolean;
   azul?: boolean;
   agruparBajo?: number;
+  /** En modo azul la leyenda solo trae %; con `valores` agrega también el monto. */
+  valores?: boolean;
 }) {
   const segs: Seg[] = azul
     ? segmentosAzules(data, agruparBajo)
@@ -150,7 +153,7 @@ export function Donut({
           <div key={d.label} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, padding: "6px 4px", borderTop: "1px solid var(--line)" }}>
             <i style={{ width: 12, height: 12, borderRadius: 3, background: d.color, flex: "0 0 auto" }} />
             <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.label}</span>
-            {!azul && <span className="num" style={{ fontWeight: 700 }}>{cop(d.valor)}</span>}
+            {(!azul || valores) && <span className="num" style={{ fontWeight: 700 }}>{cop(d.valor)}</span>}
             <span className="num" style={{ color: "var(--muted)", minWidth: 58, textAlign: "right" }}>{pct((Math.abs(d.valor) / total) * 100)}</span>
           </div>
         ))}

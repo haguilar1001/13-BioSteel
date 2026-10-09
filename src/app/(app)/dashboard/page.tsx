@@ -194,19 +194,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               <div className="card-body" style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "center", justifyContent: "center" }}>
                 <Donut
                   azul
-                  size={240}
+                  valores
+                  size={300}
                   data={lineasMes.map((l) => ({ label: nombreLinea(l.linea), valor: l.valor }))}
                   centro={{ valor: formatCOP(totalLineasMes), valorCorto: formatCOPCorto(totalLineasMes), etiqueta: "venta neta" }}
                 />
-                <div style={{ flex: "1 1 300px", maxWidth: 480 }}>
-                  {lineasMes.map((l) => (
-                    <div key={l.linea} style={{ display: "flex", gap: 10, fontSize: 13, padding: "6px 4px", borderTop: "1px solid var(--line)" }}>
-                      <span style={{ flex: 1 }}>{nombreLinea(l.linea)}</span>
-                      <span className="num" style={{ fontWeight: 700 }}><Monto value={l.valor} /></span>
-                      <span className="num" style={{ color: "var(--muted)", minWidth: 58, textAlign: "right" }}>{formatPorcentaje((l.valor / totalLineasMes) * 100)}</span>
-                    </div>
-                  ))}
-                </div>
               </div>
             </div>
           )}

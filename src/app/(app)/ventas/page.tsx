@@ -257,19 +257,11 @@ export default async function VentasPage({ searchParams }: { searchParams: Promi
             <>
               <Donut
                 azul
-                size={260}
+                valores
+                size={300}
                 data={porLinea.filter((l) => l.valor > 0 && (!filtraLinea || linSel.includes(l.linea))).map((l) => ({ label: nombreLinea(l.linea), valor: l.valor }))}
                 centro={{ valor: formatCOP(filtraLinea ? kpi.venta : totalLineas), valorCorto: formatCOPCorto(filtraLinea ? kpi.venta : totalLineas), etiqueta: "venta neta" }}
               />
-              <div style={{ flex: "1 1 320px", maxWidth: 520 }}>
-                {porLinea.filter((l) => l.valor !== 0).map((l) => (
-                  <div key={l.linea} style={{ display: "flex", gap: 10, fontSize: 13, padding: "6px 4px", borderTop: "1px solid var(--line)", opacity: filtraLinea && !linSel.includes(l.linea) ? 0.4 : 1 }}>
-                    <span style={{ flex: 1 }}>{nombreLinea(l.linea)}</span>
-                    <span className="num" style={{ fontWeight: 700 }}>{formatCOP(l.valor)}</span>
-                    <span className="num" style={{ color: "var(--muted)", minWidth: 58, textAlign: "right" }}>{formatPorcentaje((l.valor / totalLineas) * 100)}</span>
-                  </div>
-                ))}
-              </div>
             </>
           )}
         </div>
