@@ -4,9 +4,10 @@
 // venta por mes (barras). Selector de año.
 // ==========================================================
 import { requirePermiso } from "@/server/auth-context";
-import { formatCOP, formatPorcentaje } from "@/lib/format";
+import { formatCOP, formatCOPCorto, formatPorcentaje } from "@/lib/format";
 import { Monto } from "../_components/Monto";
-import { resumenAnual, ventaMensualDetalle, ventaPorCiudad, aniosConVenta, ventaNetaPorDia, clientesConVenta, resumenAnualCliente, ventaMensualDetalleCliente } from "@/lib/negocio/ventas";
+import { Donut } from "../_components/charts/Donut";
+import { lineasConVenta, ventaPorLinea, nombreLinea, resumenAnual, ventaMensualDetalle, ventaPorCiudad, aniosConVenta, ventaNetaPorDia, clientesConVenta, resumenAnualCliente, ventaMensualDetalleCliente } from "@/lib/negocio/ventas";
 import { MapaCartera } from "../_components/charts/MapaCartera";
 import { LineasMensuales } from "../_components/charts/LineasMensuales";
 import { FiltroAuto } from "../_components/FiltroAuto";
@@ -17,7 +18,7 @@ const MESES = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio
 const MES_ABBR = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 const CATS = ["var(--cat-1)", "var(--cat-2)", "var(--cat-3)", "var(--cat-4)", "var(--cat-5)", "var(--cat-6)", "var(--cat-7)", "var(--cat-8)"];
 
-export default async function VentasPage({ searchParams }: { searchParams: Promise<{ anio?: string; mes?: string; cliente?: string }> }) {
+export default async function VentasPage({ searchParams }: { searchParams: Promise<{ anio?: string; mes?: string; cliente?: string; linea?: string }> }) {
   await requirePermiso("cxp.view");
   const sp = await searchParams;
 
@@ -36,12 +37,21 @@ export default async function VentasPage({ searchParams }: { searchParams: Promi
   const clientes = await clientesConVenta(anio);
   const cliSel = listaDe(sp.cliente, new Set(clientes));
 
-  const [kpi, mesesAct, mesesAnt, ciudades] = await Promise.all([
-    cliSel.length ? resumenAnualCliente(anio, cliSel, mesesFiltro) : resumenAnual(anio, mesesFiltro),
-    cliSel.length ? ventaMensualDetalleCliente(anio, cliSel) : ventaMensualDetalle(anio),
-    cliSel.length ? ventaMensualDetalleCliente(anio - 1, cliSel) : ventaMensualDetalle(anio - 1),
+  // Líneas seleccionadas (o [] = todas). La venta por cliente no trae la línea,
+  // así que los dos filtros no se combinan: con un cliente elegido manda el cliente.
+  const lineas = await lineasConVenta(anio);
+  const linSel = cliSel.length ? [] : listaDe(sp.linea, new Set(lineas));
+  const filtraLinea = linSel.length > 0;
+
+  const [kpi, mesesAct, mesesAnt, ciudades, porLinea] = await Promise.all([
+    cliSel.length ? resumenAnualCliente(anio, cliSel, mesesFiltro) : resumenAnual(anio, mesesFiltro, linSel),
+    cliSel.length ? ventaMensualDetalleCliente(anio, cliSel) : ventaMensualDetalle(anio, linSel),
+    cliSel.length ? ventaMensualDetalleCliente(anio - 1, cliSel) : ventaMensualDetalle(anio - 1, linSel),
     ventaPorCiudad(anio, mesesFiltro, cliSel.length ? cliSel : undefined),
+    ventaPorLinea(anio, mesesFiltro),
   ]);
+  const opLineas: OpcionMulti[] = lineas.map((l) => ({ value: l, label: nombreLinea(l) }));
+  const totalLineas = porLinea.reduce((s, l) => s + l.valor, 0) || 1;
 
   // Meses con venta cargada (para el selector de mes).
   const mesesDisponibles = mesesAct.filter((m) => m.venta > 0).map((m) => m.mes);
@@ -115,7 +125,7 @@ export default async function VentasPage({ searchParams }: { searchParams: Promi
     <>
       <div className="card" style={{ marginBottom: 12 }}>
         <div className="card-body" style={{ paddingBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
-          <div className="eyebrow" style={{ fontSize: 15 }}>Informe de Ventas · {mesSel ? `${MESES[mesSel]} ` : ""}{anio}{cliSel.length ? ` · ${cliSel.join(", ")}` : ""}</div>
+          <div className="eyebrow" style={{ fontSize: 15 }}>Informe de Ventas · {mesSel ? `${MESES[mesSel]} ` : ""}{anio}{cliSel.length ? ` · ${cliSel.join(", ")}` : ""}{filtraLinea ? ` · ${linSel.map(nombreLinea).join(", ")}` : ""}</div>
           <FiltroAuto className="toolbar">
             <label className="flag" style={{ alignSelf: "center" }}>Año:</label>
             <select name="anio" defaultValue={anio} className="select">
@@ -128,6 +138,8 @@ export default async function VentasPage({ searchParams }: { searchParams: Promi
             </select>
             <label className="flag" style={{ alignSelf: "center" }}>Cliente:</label>
             <MultiSelect name="cliente" options={opClientes} selected={cliSel} placeholder="Todos" ancho={240} />
+            <label className="flag" style={{ alignSelf: "center" }}>Línea:</label>
+            <MultiSelect name="linea" options={opLineas} selected={linSel} placeholder={cliSel.length ? "Todas (con cliente no aplica)" : "Todas"} ancho={240} />
             <a href={`/ventas/export?anio=${anio}`} className="btn" title="Descargar ventas por mes en Excel">⬇️ Excel</a>
           </FiltroAuto>
         </div>
@@ -234,6 +246,38 @@ export default async function VentasPage({ searchParams }: { searchParams: Promi
           </div>
           <p className="flag" style={{ padding: "8px 14px", margin: 0 }}>Venta neta por día (con nota crédito). Cuadra con la venta del mes.</p>
         </div>
+        )}
+      </div>
+
+      {/* Venta por línea (anillo). Respeta año y mes; con filtro de línea resalta solo las elegidas. */}
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div className="chart-head">Venta por Línea <span className="hact">{mesSel ? `${MESES[mesSel]} ` : ""}{anio}</span></div>
+        <div className="card-body" style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "center", justifyContent: "center" }}>
+          {porLinea.length === 0 ? <div className="empty">Sin datos.</div> : (
+            <>
+              <Donut
+                azul
+                size={260}
+                data={porLinea.filter((l) => l.valor > 0 && (!filtraLinea || linSel.includes(l.linea))).map((l) => ({ label: nombreLinea(l.linea), valor: l.valor }))}
+                centro={{ valor: formatCOP(filtraLinea ? kpi.venta : totalLineas), valorCorto: formatCOPCorto(filtraLinea ? kpi.venta : totalLineas), etiqueta: "venta neta" }}
+              />
+              <div style={{ flex: "1 1 320px", maxWidth: 520 }}>
+                {porLinea.filter((l) => l.valor !== 0).map((l) => (
+                  <div key={l.linea} style={{ display: "flex", gap: 10, fontSize: 13, padding: "6px 4px", borderTop: "1px solid var(--line)", opacity: filtraLinea && !linSel.includes(l.linea) ? 0.4 : 1 }}>
+                    <span style={{ flex: 1 }}>{nombreLinea(l.linea)}</span>
+                    <span className="num" style={{ fontWeight: 700 }}>{formatCOP(l.valor)}</span>
+                    <span className="num" style={{ color: "var(--muted)", minWidth: 58, textAlign: "right" }}>{formatPorcentaje((l.valor / totalLineas) * 100)}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+        {(filtraLinea || cliSel.length > 0) && (
+          <p className="flag" style={{ padding: "8px 14px", margin: 0 }}>
+            {filtraLinea ? "El filtro de línea aplica a KPIs, tabla y gráfica mensual; la venta por día y por ciudad no traen la línea. " : ""}
+            {cliSel.length > 0 ? "Con un cliente elegido el filtro de línea no aplica (la venta por cliente no trae la línea)." : ""}
+          </p>
         )}
       </div>
 

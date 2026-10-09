@@ -16,6 +16,21 @@ export interface FilaLinea {
   costo: number;
 }
 
+/**
+ * Etiqueta de una línea. Se deja el código ("2007 - EQUIPOS MÉDICOS"): hay
+ * nombres que se repiten con distinto código (2007 y 3000) y sin él no se
+ * distinguirían en el filtro ni en el anillo.
+ */
+export function nombreLinea(linea: string): string {
+  return linea.trim();
+}
+
+/** Líneas con venta en el año (para el selector), asc. */
+export async function lineasConVenta(anio: number): Promise<string[]> {
+  const g = await prisma.ventaLinea.groupBy({ by: ["linea"], where: { anio }, _sum: { valor: true } });
+  return g.filter((x) => (x._sum.valor?.toNumber() ?? 0) !== 0).map((x) => x.linea).sort((a, b) => a.localeCompare(b, "es"));
+}
+
 /** Venta por línea (opcionalmente filtrada a un conjunto de meses), desc. */
 export async function ventaPorLinea(anio: number, meses?: number[]): Promise<FilaLinea[]> {
   const where: Prisma.VentaLineaWhereInput = { anio, ...(meses && meses.length ? { mes: { in: meses } } : {}) };
@@ -43,8 +58,8 @@ export async function ventaMensual(anio: number): Promise<Map<number, number>> {
 export interface MesVenta { mes: number; venta: number; costo: number }
 
 /** Venta neta y costo por mes (1–12) del año. Rellena meses sin datos con 0. */
-export async function ventaMensualDetalle(anio: number): Promise<MesVenta[]> {
-  const grupos = await prisma.ventaLinea.groupBy({ by: ["mes"], where: { anio }, _sum: { valor: true, costo: true } });
+export async function ventaMensualDetalle(anio: number, lineas?: string[]): Promise<MesVenta[]> {
+  const grupos = await prisma.ventaLinea.groupBy({ by: ["mes"], where: { anio, ...(lineas?.length ? { linea: { in: lineas } } : {}) }, _sum: { valor: true, costo: true } });
   const map = new Map(grupos.map((g) => [g.mes, { venta: g._sum.valor?.toNumber() ?? 0, costo: g._sum.costo?.toNumber() ?? 0 }]));
   return Array.from({ length: 12 }, (_, i) => {
     const mes = i + 1;
@@ -56,8 +71,10 @@ export async function ventaMensualDetalle(anio: number): Promise<MesVenta[]> {
 export interface ResumenAnual { venta: number; costo: number; utilidad: number; margen: number }
 
 /** KPIs del período (año, opcionalmente meses): venta neta, costo, utilidad y % utilidad. */
-export async function resumenAnual(anio: number, meses?: number[]): Promise<ResumenAnual> {
-  const where: Prisma.VentaLineaWhereInput = { anio, ...(meses && meses.length ? { mes: { in: meses } } : {}) };
+export async function resumenAnual(anio: number, meses?: number[], lineas?: string[]): Promise<ResumenAnual> {
+  const where: Prisma.VentaLineaWhereInput = {
+    anio, ...(meses && meses.length ? { mes: { in: meses } } : {}), ...(lineas?.length ? { linea: { in: lineas } } : {}),
+  };
   const agg = await prisma.ventaLinea.aggregate({ where, _sum: { valor: true, costo: true } });
   const venta = agg._sum.valor?.toNumber() ?? 0;
   const costo = agg._sum.costo?.toNumber() ?? 0;

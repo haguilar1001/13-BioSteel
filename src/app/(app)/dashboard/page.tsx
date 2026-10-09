@@ -11,7 +11,7 @@ import { resumenCxp } from "@/lib/negocio/cxp";
 import { resumenCartera, carteraPorCiudad } from "@/lib/negocio/cartera";
 import { resumenObligaciones, listarObligaciones, tipoLabel, type NivelAlerta } from "@/lib/negocio/obligaciones";
 import { calcularIndicadores, type IndicadorCalc } from "@/lib/negocio/indicadores";
-import { ventaMensualDetalle, ventaNetaPorDia } from "@/lib/negocio/ventas";
+import { ventaMensualDetalle, ventaNetaPorDia, ventaPorLinea, nombreLinea } from "@/lib/negocio/ventas";
 import { Medidor } from "../_components/charts/Medidor";
 import { Donut } from "../_components/charts/Donut";
 import { MapaCartera } from "../_components/charts/MapaCartera";
@@ -104,6 +104,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const ventaProyectada = diaCorte > 0 ? (ventaMesActual / diaCorte) * diasMes : ventaMesActual;
   // Fecha de corte del tablero = último día con venta cargada (no la de hoy).
   const fechaCorte = formatFecha(new Date(Date.UTC(ANIO, mesActual - 1, diaCorte)));
+  // Venta del mes en curso por línea (anillo). Si el mes aún no tiene venta, el último mes con datos.
+  const lineasMes = verCxp ? (await ventaPorLinea(ANIO, [mesActual])).filter((l) => l.valor > 0) : [];
+  const totalLineasMes = lineasMes.reduce((s, l) => s + l.valor, 0);
   const difPresupuesto = ventaProyectada - PRESUPUESTO_VENTA_MES;
   // Cumplimiento de la meta (proyectado / presupuesto) y color semáforo.
   const cumplimiento = PRESUPUESTO_VENTA_MES > 0 ? (ventaProyectada / PRESUPUESTO_VENTA_MES) * 100 : 0;
@@ -182,6 +185,31 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               </div>
             </div>
           </div>
+
+          {lineasMes.length > 0 && (
+            <div className="card" style={{ marginBottom: 12 }}>
+              <div className="chart-head">
+                Venta por línea <span className="hact"><a href={`/ventas?anio=${ANIO}&mes=${mesActual}`} style={{ color: "#fff" }}>{MESES_FULL[mesActual]} {ANIO} · ver en Ventas →</a></span>
+              </div>
+              <div className="card-body" style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "center", justifyContent: "center" }}>
+                <Donut
+                  azul
+                  size={240}
+                  data={lineasMes.map((l) => ({ label: nombreLinea(l.linea), valor: l.valor }))}
+                  centro={{ valor: formatCOP(totalLineasMes), valorCorto: formatCOPCorto(totalLineasMes), etiqueta: "venta neta" }}
+                />
+                <div style={{ flex: "1 1 300px", maxWidth: 480 }}>
+                  {lineasMes.map((l) => (
+                    <div key={l.linea} style={{ display: "flex", gap: 10, fontSize: 13, padding: "6px 4px", borderTop: "1px solid var(--line)" }}>
+                      <span style={{ flex: 1 }}>{nombreLinea(l.linea)}</span>
+                      <span className="num" style={{ fontWeight: 700 }}><Monto value={l.valor} /></span>
+                      <span className="num" style={{ color: "var(--muted)", minWidth: 58, textAlign: "right" }}>{formatPorcentaje((l.valor / totalLineasMes) * 100)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
 
