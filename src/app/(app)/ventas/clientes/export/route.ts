@@ -2,7 +2,8 @@
 import type { NextRequest } from "next/server";
 import { requireUsuario } from "@/server/auth-context";
 import { puede } from "@/lib/rbac/authorize";
-import { ventaPorCliente, resumenAnual, aniosConVenta, mesesConVenta } from "@/lib/negocio/ventas";
+import { ventaPorCliente, ventaPorClienteLinea, lineasConVentaItem, resumenAnual, aniosConVenta, mesesConVenta } from "@/lib/negocio/ventas";
+import { listaDe } from "../../../_components/filtro-multi";
 import { libroDescarga } from "@/lib/xlsx-export";
 
 const MESES = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
@@ -21,7 +22,11 @@ export async function GET(req: NextRequest) {
   const meses = mesSel ? [mesSel] : undefined;
   const etiqueta = mesSel ? `${MESES[mesSel]} ${anio}` : `${anio}`;
 
-  const [clientes, kpi] = await Promise.all([ventaPorCliente(anio, meses), resumenAnual(anio, meses)]);
+  const lineaSel = listaDe(req.nextUrl.searchParams.get("linea") ?? undefined, new Set(await lineasConVentaItem(anio, meses)));
+  const [clientes, kpi] = await Promise.all([
+    lineaSel.length ? ventaPorClienteLinea(anio, lineaSel, meses) : ventaPorCliente(anio, meses),
+    resumenAnual(anio, meses, lineaSel),
+  ]);
   const cuerpo: (string | number)[][] = clientes.map((c) => {
     const util = c.valor - c.costo;
     return [c.clienteNombre, c.nit ?? "", c.valor, pct(c.valor, kpi.venta), c.costo, util, pct(util, c.valor)];

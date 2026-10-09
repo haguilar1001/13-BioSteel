@@ -328,6 +328,8 @@ export interface FiltroConsumo {
   marca?: string[];
   /** Instalación de la bodega que despachó (101/102/104/106). */
   instalacion?: number[];
+  /** Línea de producto (VentaItemIps.linea). Selección múltiple. */
+  linea?: string[];
 }
 
 /** Etiqueta de los renglones cuyo archivo de origen no traía lista de precios. */
@@ -361,6 +363,7 @@ export async function utilidadPorLista(f: FiltroConsumo, opciones: OpcionIps[]):
       ...(ips ? { ips: { in: ips } } : {}),
       ...soloMarca(f),
       ...soloInstalacion(f),
+      ...soloLinea(f),
     },
     _sum: { valor: true, costo: true },
   });
@@ -387,6 +390,7 @@ export async function ipsPorLista(f: FiltroConsumo, opciones: OpcionIps[]): Prom
       ...(ips ? { ips: { in: ips } } : {}),
       ...soloMarca(f),
       ...soloInstalacion(f),
+      ...soloLinea(f),
     },
     _sum: { valor: true, costo: true },
   });
@@ -414,6 +418,7 @@ export async function itemsPorListaIps(f: FiltroConsumo, opciones: OpcionIps[]):
       ...(ips ? { ips: { in: ips } } : {}),
       ...soloMarca(f),
       ...soloInstalacion(f),
+      ...soloLinea(f),
     },
     _sum: { valor: true, costo: true, cantidad: true },
   });
@@ -450,6 +455,40 @@ function soloLista(f: FiltroConsumo) {
  */
 function soloMarca(f: FiltroConsumo) {
   return f.marca && f.marca.length ? { marca: { in: f.marca } } : {};
+}
+
+/** Recorte por línea(s) de producto. Selección múltiple. */
+function soloLinea(f: { linea?: string[] }) {
+  return f.linea && f.linea.length ? { linea: { in: f.linea } } : {};
+}
+
+/**
+ * Líneas con venta en el detalle por ítem (VentaItemIps), para los selectores de
+ * Consumos y Por Cliente. Vacío hasta que se recalcula el detalle con la línea.
+ */
+export async function lineasConVentaItem(anio: number, meses?: number[]): Promise<string[]> {
+  const filas = await prisma.ventaItemIps.findMany({
+    where: { anio, ...(meses && meses.length ? { mes: { in: meses } } : {}), linea: { not: "" } },
+    distinct: ["linea"],
+    select: { linea: true },
+    orderBy: { linea: "asc" },
+  });
+  return filas.map((f) => f.linea);
+}
+
+/** Venta por cliente restringida a una o varias líneas (desde el detalle por ítem × IPS). */
+export async function ventaPorClienteLinea(anio: number, lineas: string[], meses?: number[]): Promise<FilaClienteVenta[]> {
+  const where: Prisma.VentaItemIpsWhereInput = { anio, linea: { in: lineas }, ...(meses && meses.length ? { mes: { in: meses } } : {}) };
+  const grupos = await prisma.ventaItemIps.groupBy({ by: ["ips", "nit"], where, _sum: { valor: true, costo: true } });
+  const m = new Map<string, FilaClienteVenta>();
+  for (const g of grupos) {
+    const e = m.get(g.ips) ?? { clienteNombre: g.ips, nit: g.nit, valor: 0, costo: 0 };
+    e.valor += g._sum.valor?.toNumber() ?? 0;
+    e.costo += g._sum.costo?.toNumber() ?? 0;
+    if (!e.nit && g.nit) e.nit = g.nit;
+    m.set(g.ips, e);
+  }
+  return [...m.values()].sort((a, b) => b.valor - a.valor);
 }
 
 /** Recorte por instalación de la bodega que despachó. Selección múltiple. */
@@ -506,6 +545,7 @@ export async function marcasFiltradas(f: FiltroConsumo, opciones: OpcionIps[]): 
     ...soloLista(f),
     ...soloMarca(f),
     ...soloInstalacion(f),
+    ...soloLinea(f),
   };
   const grupos = await prisma.ventaItemIps.groupBy({ by: ["marca"], where, _sum: { valor: true, costo: true } });
   return grupos
@@ -523,6 +563,7 @@ export async function ipsPorMarcaFiltrado(f: FiltroConsumo, opciones: OpcionIps[
     ...soloLista(f),
     ...soloMarca(f),
     ...soloInstalacion(f),
+    ...soloLinea(f),
   };
   const grupos = await prisma.ventaItemIps.groupBy({ by: ["marca", "ips"], where, _sum: { valor: true, costo: true } });
   const map = new Map<string, MarcaConIps["ips"]>();
@@ -545,6 +586,7 @@ export async function itemsPorMarcaFiltrado(f: FiltroConsumo, opciones: OpcionIp
     ...soloLista(f),
     ...soloMarca(f),
     ...soloInstalacion(f),
+    ...soloLinea(f),
   };
   const grupos = await prisma.ventaItemIps.groupBy({
     by: ["marca", "referencia", "descripcion"], where,

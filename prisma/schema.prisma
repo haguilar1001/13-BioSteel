@@ -1393,10 +1393,16 @@ model VentaItemIps {
   /// mes son dos orígenes que no hay que sumar en uno solo.
   instalacion Int?
 
-  @@unique([anio, mes, marca, referencia, ips, lista, instalacion])
+  /// Línea de producto del renglón (VentaDoc.linea; "(sin línea)" si viene vacía).
+  /// Permite filtrar Consumos y Ventas por Cliente por línea. Entra en la llave:
+  /// el mismo ítem puede venir con dos líneas distintas y no se suma en una fila.
+  linea       String  @default("")
+
+  @@unique([anio, mes, marca, referencia, ips, lista, instalacion, linea])
   @@index([anio, mes])
   @@index([ips])
   @@index([instalacion])
+  @@index([linea])
   @@index([marca])
   @@index([nit])
   @@index([lista])

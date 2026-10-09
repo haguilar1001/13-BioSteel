@@ -193,6 +193,8 @@ export interface FilaMarcaIpsAgg { anio: number; mes: number; marca: string; ips
 export interface FilaItemAgg { anio: number; mes: number; marca: string; referencia: string; descripcion: string; cantidad: number; valor: number; costo: number }
 export interface FilaItemIpsAgg extends FilaItemAgg {
   ips: string; nit: string | null; lista: string;
+  /** Línea de producto del renglón. */
+  linea: string;
   /** Instalación de la bodega que despachó; null si no cruzó contra el catálogo. */
   instalacion: number | null;
 }
@@ -302,11 +304,12 @@ export function agregarVentas(
     // por código y otra por nombre— con la utilidad partida entre las dos.
     const listaCanon = nombreLista(r.lista);
     const instalacion = resolverInstalacion(r.bod, mapaInstalacion);
-    const kII = `${kI}|${r.cliente}|${listaCanon}|${instalacion}`;
+    const lineaII = r.linea || "(sin línea)";
+    const kII = `${kI}|${r.cliente}|${listaCanon}|${instalacion}|${lineaII}`;
     const eII = porItemIps.get(kII) ?? {
       anio: r.anio, mes: r.mes, marca: r.marca, referencia: ref,
       descripcion: (r.notas || "").trim() || ref, ips: r.cliente, nit: r.nit,
-      lista: listaCanon, instalacion,
+      lista: listaCanon, instalacion, linea: lineaII,
       cantidad: 0, valor: 0, costo: 0,
     };
     eII.cantidad += r.cantidad; eII.valor += neto; eII.costo += r.costo;

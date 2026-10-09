@@ -15,6 +15,7 @@ import {
   marcasFiltradas, ipsPorMarcaFiltrado, itemsPorMarcaFiltrado,
   listasConVenta, utilidadPorLista, ipsPorLista, itemsPorListaIps, marcasConVenta,
   instalacionesConVenta,
+  lineasConVentaItem,
   SIN_LISTA, type FiltroConsumo,
 } from "@/lib/negocio/ventas";
 import { FiltroAuto } from "../../_components/FiltroAuto";
@@ -34,7 +35,7 @@ type OrdenCol = "marca" | "venta" | "costo" | "utilidad" | "margen";
 
 interface Params {
   anio?: string; mes?: string; orden?: string; dir?: string; vista?: string;
-  ips?: string; ciudad?: string; lista?: string; marca?: string; instalacion?: string;
+  ips?: string; ciudad?: string; lista?: string; marca?: string; instalacion?: string; linea?: string;
 }
 
 export default async function ConsumosPage({ searchParams }: { searchParams: Promise<Params> }) {
@@ -73,6 +74,9 @@ export default async function ConsumosPage({ searchParams }: { searchParams: Pro
   const instalacionesValidas = new Set(instalacionesDisp.map((i) => String(i.valor)));
   const instalacionSel = listaDe(sp.instalacion, instalacionesValidas).map(Number);
 
+  const lineasDisp = await lineasConVentaItem(anio, mesesQ);
+  const lineaSel = listaDe(sp.linea, new Set(lineasDisp));
+
   const filtro: FiltroConsumo = {
     anio, meses: mesesQ,
     ips: ipsSel.length ? ipsSel : undefined,
@@ -80,6 +84,7 @@ export default async function ConsumosPage({ searchParams }: { searchParams: Pro
     lista: listaSel.length ? listaSel : undefined,
     marca: marcaSel.length ? marcaSel : undefined,
     instalacion: instalacionSel.length ? instalacionSel : undefined,
+    linea: lineaSel.length ? lineaSel : undefined,
   };
 
   const [marcasBase, ipsMap, itemsMap, porLista, ipsListaMap, itemsListaMap] = await Promise.all([
@@ -130,7 +135,7 @@ export default async function ConsumosPage({ searchParams }: { searchParams: Pro
   // Todo lo que filtra viaja en los enlaces de orden y de vista: cambiar de
   // columna o de desglose no puede borrar el filtro que el usuario puso.
   const qsPart = (nombre: string, arr: (string | number)[]) => (arr.length ? `&${nombre}=${encodeURIComponent(arr.join(","))}` : "");
-  const filtroQS = `${qsPart("ips", ipsSel)}${qsPart("ciudad", ciudadSel)}${qsPart("lista", listaSel)}${qsPart("marca", marcaSel)}${qsPart("instalacion", instalacionSel)}`;
+  const filtroQS = `${qsPart("ips", ipsSel)}${qsPart("ciudad", ciudadSel)}${qsPart("lista", listaSel)}${qsPart("marca", marcaSel)}${qsPart("instalacion", instalacionSel)}${qsPart("linea", lineaSel)}`;
   const base = `/ventas/consumos?anio=${anio}${qsPart("mes", meses)}${filtroQS}`;
   const ordenBase = `${base}&vista=${vista}`;
   const linkVista = (v: "ips" | "item") => `${base}&orden=${orden}&dir=${dir}&vista=${v}`;
@@ -144,13 +149,14 @@ export default async function ConsumosPage({ searchParams }: { searchParams: Pro
     );
   };
 
-  const hayFiltro = meses.length || ipsSel.length || ciudadSel.length || listaSel.length || marcaSel.length || instalacionSel.length;
+  const hayFiltro = meses.length || ipsSel.length || ciudadSel.length || listaSel.length || marcaSel.length || instalacionSel.length || lineaSel.length;
 
   const opMeses: OpcionMulti[] = mesesDisp.map((m) => ({ value: String(m), label: MESES[m]! }));
   const opListas: OpcionMulti[] = [...listasDisp.map((l) => ({ value: l, label: nombreLista(l) })), { value: SIN_LISTA, label: SIN_LISTA }];
   const opMarcas: OpcionMulti[] = marcasDisp.map((m) => ({ value: m, label: m }));
   const opCiudades: OpcionMulti[] = ciudades.map((c) => ({ value: c.ciudad, label: c.ciudad, sub: `${c.ips} IPS` }));
   const opIps: OpcionMulti[] = opcionesIps.map((o) => ({ value: o.ips, label: o.ips, sub: o.ciudad || undefined }));
+  const opLineas: OpcionMulti[] = lineasDisp.map((l) => ({ value: l, label: l }));
   const opInstalaciones: OpcionMulti[] = instalacionesDisp.map((i) => ({ value: String(i.valor), label: i.label }));
 
   return (
@@ -161,6 +167,7 @@ export default async function ConsumosPage({ searchParams }: { searchParams: Pro
             <div className="eyebrow" style={{ fontSize: 15 }}>Informe de Consumos · {periodo} · {marcas.length} proveedores</div>
             <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3 }}>
               {marcaSel.length ? <>Solo <b>{marcaSel.length === 1 ? marcaSel[0] : `${marcaSel.length} proveedores`}</b> · </> : null}
+              {lineaSel.length ? <>Línea <b>{lineaSel.length === 1 ? lineaSel[0] : `${lineaSel.length} líneas`}</b> · </> : null}
               {instalacionSel.length ? <>Instalación <b>{instalacionSel.join(", ")}</b> · </> : null}
               {ipsSel.length ? <>Solo <b>{ipsSel.length === 1 ? ipsSel[0] : `${ipsSel.length} IPS`}</b></>
                 : ciudadSel.length ? <>Solo <b>{ciudadSel.length === 1 ? ciudadSel[0] : `${ciudadSel.length} ciudades`}</b></>
@@ -202,6 +209,13 @@ export default async function ConsumosPage({ searchParams }: { searchParams: Pro
               <>
                 <label className="flag" style={{ alignSelf: "center" }}>Instalación:</label>
                 <MultiSelect name="instalacion" options={opInstalaciones} selected={instalacionSel.map(String)} placeholder="Todas" ancho={200} />
+              </>
+            ) : null}
+            {/* Línea de producto: acota todo el informe a una o varias líneas. */}
+            {opLineas.length ? (
+              <>
+                <label className="flag" style={{ alignSelf: "center" }}>Línea:</label>
+                <MultiSelect name="linea" options={opLineas} selected={lineaSel} placeholder="Todas" ancho={260} />
               </>
             ) : null}
             <label className="flag" style={{ alignSelf: "center" }}>Ciudad:</label>
@@ -353,7 +367,7 @@ export default async function ConsumosPage({ searchParams }: { searchParams: Pro
               const activo = listaSel.length === 1 && listaSel[0] === l.lista;
               const href = activo
                 ? `${base}&orden=${orden}&dir=${dir}&vista=${vista}`
-                : `/ventas/consumos?anio=${anio}${qsPart("mes", meses)}${qsPart("ips", ipsSel)}${qsPart("ciudad", ciudadSel)}${qsPart("marca", marcaSel)}${qsPart("instalacion", instalacionSel)}&orden=${orden}&dir=${dir}&vista=${vista}&lista=${encodeURIComponent(l.lista)}`;
+                : `/ventas/consumos?anio=${anio}${qsPart("mes", meses)}${qsPart("ips", ipsSel)}${qsPart("ciudad", ciudadSel)}${qsPart("marca", marcaSel)}${qsPart("instalacion", instalacionSel)}${qsPart("linea", lineaSel)}&orden=${orden}&dir=${dir}&vista=${vista}&lista=${encodeURIComponent(l.lista)}`;
               const ipsList = ipsListaMap.get(l.lista) ?? [];
               return (
                 <details key={l.lista} className="cons-det" open={activo}>
