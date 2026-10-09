@@ -18,3 +18,5 @@ jobs:
       - run: npx prisma generate
       - run: npm run typecheck
       - run: npm test
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test

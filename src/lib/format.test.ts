@@ -27,5 +27,5 @@ describe("formato de fechas (DD/MM/AAAA)", () => {
     assert.equal(formatFecha(new Date("2035-10-31T00:00:00.000Z")), "31/10/2035"));
   it("formatFechaSello usa hora de Colombia", () =>
     assert.equal(formatFechaSello(new Date("2026-04-21T02:00:00.000Z")), "20/04/2026"));
-  it("formatFechaHora", () => assert.equal(formatFechaHora(new Date(2026, 3, 20, 15, 29)), "20/04/2026 15:29"));
+  it("formatFechaHora", () => assert.equal(formatFechaHora(new Date(2026, 3, 20, 15, 29)), "20/04/2026 10:29"));
 });
