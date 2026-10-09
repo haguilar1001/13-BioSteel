@@ -569,6 +569,8 @@ export interface DetallePendiente {
   nroOrden: string; proveedor: string; itemResumen: string; bodegaCodigo: string; bodegaDesc: string;
   cantOrden: number; cantEntrada: number; cantPendiente: number; valorPendiente: number;
   fechaOrden: Date | null; fechaEntrega: Date | null; diasVencido: number | null; linea: string;
+  /** Instalación de la bodega (101 propio · 102 consignación · 104 préstamo…); null = bodega sin catalogar. */
+  instalacion: number | null;
 }
 
 /**
@@ -579,7 +581,8 @@ export async function detallePendientes(f: FiltroCompras, hoy: Date, limite = 50
   const filas = await prisma.$queryRaw<Record<string, unknown>[]>`
     SELECT m."nroOrden", m."proveedor", m."itemResumen", m."bodegaCodigo", m."bodegaDesc",
            m."cantOrden", m."cantEntrada", m."cantPendiente", m."valorPendiente",
-           m."fechaOrden", m."fechaEntrega", m."linea"
+           m."fechaOrden", m."fechaEntrega", m."linea",
+           (SELECT b."instalacion" FROM "InvBodega" b WHERE b."codigo" = m."bodegaCodigo" LIMIT 1) AS "instalacion"
     FROM "CompraPendiente" m WHERE ${wherePendientes(f)}
     ORDER BY m."fechaEntrega" ASC NULLS LAST, m."valorPendiente" DESC LIMIT ${limite}`;
   const corte = Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), hoy.getUTCDate());
@@ -594,12 +597,15 @@ export async function detallePendientes(f: FiltroCompras, hoy: Date, limite = 50
       fechaEntrega,
       diasVencido: fechaEntrega ? Math.round((corte - fechaEntrega.getTime()) / 86_400_000) : null,
       linea: String(r.linea),
+      instalacion: r.instalacion == null ? null : Number(r.instalacion),
     };
   });
 }
 
 export interface OrdenPendiente {
   nroOrden: string;
+  /** Instalaciones de las bodegas de la orden (null = bodega sin catalogar). */
+  instalaciones: (number | null)[];
   renglones: number;
   unidades: number;
   valorPendiente: number;
@@ -611,6 +617,8 @@ export interface OrdenPendiente {
 export interface ProveedorPendiente {
   proveedor: string;
   ordenes: OrdenPendiente[];
+  /** Instalaciones donde tiene pendientes (sin repetir). */
+  instalaciones: (number | null)[];
   renglones: number;
   unidades: number;
   valorPendiente: number;
@@ -632,8 +640,9 @@ export function agruparPendientes(filas: DetallePendiente[]): ProveedorPendiente
   for (const r of filas) {
     const nombre = r.proveedor || "(sin proveedor)";
     const ordenes = provs.get(nombre) ?? new Map<string, OrdenPendiente>();
-    const o = ordenes.get(r.nroOrden) ?? { nroOrden: r.nroOrden, renglones: 0, unidades: 0, valorPendiente: 0, fechaEntrega: null, diasVencido: null };
+    const o = ordenes.get(r.nroOrden) ?? { nroOrden: r.nroOrden, instalaciones: [], renglones: 0, unidades: 0, valorPendiente: 0, fechaEntrega: null, diasVencido: null };
     o.renglones++;
+    if (!o.instalaciones.includes(r.instalacion)) o.instalaciones.push(r.instalacion);
     o.unidades += r.cantPendiente;
     o.valorPendiente += r.valorPendiente;
     if (r.fechaEntrega && (!o.fechaEntrega || r.fechaEntrega < o.fechaEntrega)) o.fechaEntrega = r.fechaEntrega;
@@ -648,6 +657,7 @@ export function agruparPendientes(filas: DetallePendiente[]): ProveedorPendiente
       const dias = ordenes.map((o) => o.diasVencido).filter((d): d is number => d != null);
       return {
         proveedor, ordenes,
+        instalaciones: [...new Set(ordenes.flatMap((o) => o.instalaciones))].sort((a, b) => (a ?? 9999) - (b ?? 9999)),
         renglones: ordenes.reduce((s, o) => s + o.renglones, 0),
         unidades: ordenes.reduce((s, o) => s + o.unidades, 0),
         valorPendiente: ordenes.reduce((s, o) => s + o.valorPendiente, 0),

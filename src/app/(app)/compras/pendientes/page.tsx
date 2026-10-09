@@ -11,12 +11,25 @@
 import { requirePermiso } from "@/server/auth-context";
 import { formatNumero, formatFecha, formatFechaSello } from "@/lib/format";
 import { Monto } from "../../_components/Monto";
-import { resumenCompras, detallePendientes, corteDePendientes, agruparPendientes } from "@/lib/negocio/compras";
+import { resumenCompras, detallePendientes, corteDePendientes, agruparPendientes, etiquetaInstalacion } from "@/lib/negocio/compras";
 import { resolverFiltro, type ParamsCompras } from "../_filtro";
 import { BarraFiltros } from "../_BarraFiltros";
 
 // Tope de renglones leídos para agrupar (el mismo del Excel): sin recortar por orden.
 const LIMITE = 20_000;
+
+/** Instalación de la bodega: propio, consignación, préstamo… ("Sin catalogar" si la bodega no está en el catálogo). */
+function InstalacionTags({ lista }: { lista: (number | null)[] }) {
+  return (
+    <>
+      {lista.map((i) => (
+        <span key={i ?? "x"} className={`tag ${i == null ? "t-w1" : i === 101 ? "t-ok" : "t-blue"}`} style={{ marginRight: 4 }}>
+          {i == null ? "Sin catalogar" : etiquetaInstalacion(i)}
+        </span>
+      ))}
+    </>
+  );
+}
 
 /** Semáforo de atraso: al día, por vencer o vencido. */
 function tonoAtraso(dias: number | null): { clase: string; texto: string } {
@@ -90,6 +103,7 @@ export default async function PendientesPage({ searchParams }: { searchParams: P
               <div className="pend-fila pend-cab" aria-hidden="true">
                 <span />
                 <span>Proveedor</span>
+                <span>Instalación</span>
                 <span className="r">Órdenes</span>
                 <span className="r">Unidades</span>
                 <span className="r">$ Pendiente</span>
@@ -104,6 +118,7 @@ export default async function PendientesPage({ searchParams }: { searchParams: P
                     <summary className="pend-fila">
                       <span className="cons-chev">▸</span>
                       <span style={{ fontWeight: 600 }} title={p.proveedor}>{p.proveedor}</span>
+                      <span><InstalacionTags lista={p.instalaciones} /></span>
                       <span className="r num" style={{ fontWeight: 700 }}>{formatNumero(p.ordenes.length)}</span>
                       <span className="r num flag">{formatNumero(p.unidades)}</span>
                       <span className="r num"><Monto value={p.valorPendiente} /></span>
@@ -114,7 +129,7 @@ export default async function PendientesPage({ searchParams }: { searchParams: P
                     <div className="pend-ordenes">
                       <table>
                         <thead>
-                          <tr><th>Nro orden</th><th className="r">Renglones</th><th className="r">Unidades</th><th className="r">$ Pendiente</th><th>Entrega</th><th>Atraso</th></tr>
+                          <tr><th>Nro orden</th><th>Instalación</th><th className="r">Renglones</th><th className="r">Unidades</th><th className="r">$ Pendiente</th><th>Entrega</th><th>Atraso</th></tr>
                         </thead>
                         <tbody>
                           {p.ordenes.map((o) => {
@@ -122,6 +137,7 @@ export default async function PendientesPage({ searchParams }: { searchParams: P
                             return (
                               <tr key={o.nroOrden}>
                                 <td style={{ fontWeight: 600 }}>{o.nroOrden}</td>
+                                <td><InstalacionTags lista={o.instalaciones} /></td>
                                 <td className="r num">{formatNumero(o.renglones)}</td>
                                 <td className="r num flag">{formatNumero(o.unidades)}</td>
                                 <td className="r num"><Monto value={o.valorPendiente} /></td>

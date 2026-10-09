@@ -3,7 +3,7 @@
 import type { NextRequest } from "next/server";
 import { requireUsuario } from "@/server/auth-context";
 import { puede } from "@/lib/rbac/authorize";
-import { detallePendientes } from "@/lib/negocio/compras";
+import { detallePendientes, etiquetaInstalacion } from "@/lib/negocio/compras";
 import { libroDescarga } from "@/lib/xlsx-export";
 import { resolverFiltro, type ParamsCompras } from "../../_filtro";
 
@@ -23,15 +23,16 @@ export async function GET(req: NextRequest) {
     r.nroOrden, r.proveedor, r.itemResumen, r.bodegaCodigo, r.bodegaDesc,
     r.cantOrden, r.cantEntrada, r.cantPendiente, r.valorPendiente,
     fecha(r.fechaOrden), fecha(r.fechaEntrega), r.diasVencido ?? "", r.linea,
+    r.instalacion == null ? "Sin catalogar" : etiquetaInstalacion(r.instalacion),
   ]);
 
   return libroDescarga({
     hoja: "Pendientes por despacho",
     encabezado: ["Nro orden", "Proveedor", "Ítem", "Bodega", "Desc. bodega",
       "Cant. orden", "Cant. entrada", "Cant. pendiente", "Valor neto pendiente",
-      "Fecha orden", "Fecha entrega", "Días vencido", "Línea"],
+      "Fecha orden", "Fecha entrega", "Días vencido", "Línea", "Instalación"],
     filas: cuerpo,
-    anchos: [16, 34, 40, 10, 28, 12, 12, 14, 18, 12, 12, 12, 24],
+    anchos: [16, 34, 40, 10, 28, 12, 12, 14, 18, 12, 12, 12, 24, 18],
     archivo: `pendientes-por-despacho-${c.query.replace(/[=&]/g, "-")}.xlsx`,
   });
 }
