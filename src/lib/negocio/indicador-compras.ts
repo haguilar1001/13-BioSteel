@@ -18,6 +18,7 @@
 // ==========================================================
 import "server-only";
 import { prisma } from "@/lib/db";
+import { Prisma } from "@prisma/client";
 import { CRITERIOS, PUNTAJE_MAXIMO } from "./importar-indicador-compras";
 
 export { CRITERIOS, PUNTAJE_MAXIMO };
@@ -101,6 +102,104 @@ export async function resumenIndicador(anio: number, meses?: number[]): Promise<
     pct: totales > 0 ? (completas / totales) * 100 : null,
     mesesEnMeta: conDato.filter((m) => m.cumple).length,
     peor,
+  };
+}
+
+// ---------- 1-bis) Proxy automático desde el estado de las órdenes ----------
+//
+// Mismo indicador, pero calculado desde SIESA en vez del formato: una orden
+// cuenta como COMPLETA cuando TODOS sus renglones están en "Cumplido". Es un
+// PROXY, no el dato oficial, y no cuadra con el formato manual por tres razones
+// que la pantalla deja dichas:
+//
+//   · Es el estado ACTUAL de la orden, no el que tenía al recibirse. Una orden
+//     vieja que ya se cerró aparece completa hoy, así que los meses pasados se
+//     "arreglan" solos y suben hacia 100 %.
+//   · El denominador son TODAS las órdenes del mes, incluidas las que aún no
+//     han llegado ("Aprobado", "En elaboración"): bajan el % de los meses
+//     recientes sin que sea un incumplimiento real. Por eso va el desglose.
+//   · El mes es el de la FECHA DE ORDEN, no el de recepción.
+//
+// El estado de la orden se resume con el "peor" de sus renglones: basta un
+// renglón sin cumplir para que la orden no esté completa.
+
+export interface ResumenProxyEstado {
+  meses: MesIndicador[];
+  conDato: number[];
+  completas: number;
+  totales: number;
+  pct: number | null;
+  mesesEnMeta: number;
+  peor: MesIndicador | null;
+  /** Órdenes clasificadas por su estado agregado, para no esconder nada. */
+  porEstado: { cumplido: number; parcial: number; aprobado: number; elaboracion: number };
+}
+
+export async function aniosConProxyEstado(): Promise<number[]> {
+  const filas = await prisma.compraOrden.groupBy({ by: ["anio"], orderBy: { anio: "asc" } });
+  return filas.map((f) => f.anio);
+}
+
+export async function resumenProxyEstado(anio: number, meses?: number[]): Promise<ResumenProxyEstado> {
+  const filtroMes = meses && meses.length ? Prisma.sql`AND "mes" IN (${Prisma.join(meses)})` : Prisma.empty;
+
+  const [filasMes, brk] = await Promise.all([
+    // Órdenes por mes: completa = todos los renglones en "Cumplido". El mes de
+    // la orden es único (todos sus renglones comparten fechaOrden), MIN lo fija.
+    prisma.$queryRaw<{ mes: number; totales: number; completas: number }[]>`
+      WITH por_orden AS (
+        SELECT "nroOrden", MIN("mes") AS mes, bool_and("estado" = 'Cumplido') AS completa
+        FROM "CompraOrden" WHERE "anio" = ${anio} ${filtroMes}
+        GROUP BY "nroOrden"
+      )
+      SELECT mes, COUNT(*)::int AS totales, COUNT(*) FILTER (WHERE completa)::int AS completas
+      FROM por_orden GROUP BY mes ORDER BY mes`,
+    // Desglose por estado agregado de la orden en todo el período.
+    prisma.$queryRaw<{ cumplido: number; parcial: number; aprobado: number; elaboracion: number }[]>`
+      WITH por_orden AS (
+        SELECT "nroOrden",
+               bool_and("estado" = 'Cumplido') AS completa,
+               bool_or("estado" IN ('Cumplido', 'Parcial')) AS recibido,
+               bool_and("estado" = 'En elaboración') AS borrador
+        FROM "CompraOrden" WHERE "anio" = ${anio} ${filtroMes}
+        GROUP BY "nroOrden"
+      )
+      SELECT
+        COUNT(*) FILTER (WHERE completa)::int AS cumplido,
+        COUNT(*) FILTER (WHERE NOT completa AND recibido)::int AS parcial,
+        COUNT(*) FILTER (WHERE NOT completa AND NOT recibido AND NOT borrador)::int AS aprobado,
+        COUNT(*) FILTER (WHERE borrador)::int AS elaboracion
+      FROM por_orden`,
+  ]);
+
+  const mapa = new Map(filasMes.map((f) => [Number(f.mes), f]));
+  const todos: MesIndicador[] = Array.from({ length: 12 }, (_, i) => {
+    const f = mapa.get(i + 1);
+    const totales = n(f?.totales);
+    if (!f || totales <= 0) return { mes: i + 1, completas: 0, totales: 0, pct: null, cumple: null };
+    const completas = n(f.completas);
+    const pct = (completas / totales) * 100;
+    return { mes: i + 1, completas, totales, pct, cumple: pct > META_ORDENES };
+  });
+
+  const conDato = todos.filter((m) => m.pct != null);
+  const completas = conDato.reduce((s, m) => s + m.completas, 0);
+  const totales = conDato.reduce((s, m) => s + m.totales, 0);
+  const peor = conDato.length
+    ? conDato.reduce((min, m) => (m.pct! < min.pct! ? m : min))
+    : null;
+  const b = brk[0] ?? { cumplido: 0, parcial: 0, aprobado: 0, elaboracion: 0 };
+
+  return {
+    meses: todos,
+    conDato: conDato.map((m) => m.mes),
+    completas, totales,
+    pct: totales > 0 ? (completas / totales) * 100 : null,
+    mesesEnMeta: conDato.filter((m) => m.cumple).length,
+    peor,
+    porEstado: {
+      cumplido: n(b.cumplido), parcial: n(b.parcial), aprobado: n(b.aprobado), elaboracion: n(b.elaboracion),
+    },
   };
 }
 

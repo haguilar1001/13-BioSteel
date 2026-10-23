@@ -21,6 +21,7 @@ import { LineasMensuales } from "../../_components/charts/LineasMensuales";
 import { Buscador } from "../../_components/Buscador";
 import {
   resumenIndicador, resumenEvaluacion, aniosConIndicador, mesesConEvaluacion,
+  resumenProxyEstado,
   META_ORDENES, META_PROVEEDOR, PUNTAJE_MAXIMO, MES_CORTO, MES_LARGO,
 } from "@/lib/negocio/indicador-compras";
 
@@ -71,10 +72,15 @@ export default async function IndicadoresComprasPage({
   const seleccion = [...new Set(pedidos)].sort((a, b) => a - b);
   const acota = seleccion.length ? seleccion : undefined;
 
-  const [ind, ev] = await Promise.all([
+  const [ind, ev, px] = await Promise.all([
     resumenIndicador(anio, acota),
     resumenEvaluacion(anio, acota),
+    resumenProxyEstado(anio, acota),
   ]);
+
+  // El proxy se corta en su último mes con órdenes, igual que el manual.
+  const pxHasta = px.conDato.length ? Math.max(...px.conDato) : 0;
+  const pxVisibles = px.meses.slice(0, pxHasta);
 
   const periodoLabel = seleccion.length
     ? seleccion.map((m) => MES_ABBR[m]).join(" · ")
@@ -289,6 +295,167 @@ export default async function IndicadoresComprasPage({
         <div className="card-body" style={{ padding: "8px 14px", fontSize: 12, color: "var(--muted)" }}>
           El % del período es <b>Σ completas / Σ totales</b>, no el promedio de los porcentajes
           mensuales: un mes de 40 órdenes no puede pesar lo mismo que uno de 540.
+        </div>
+      </div>
+
+      {/* ---------- 1-bis. Proxy automático desde el estado de las órdenes ---------- */}
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div className="chart-head">
+          Proxy automático · estado de las órdenes (SIESA)
+          <span className="hact">
+            {px.pct != null ? `${pct1(px.pct)} vs. ${ind.pct != null ? pct1(ind.pct) : "—"} del formato` : "sin órdenes en el período"}
+          </span>
+        </div>
+        <div className="card-body" style={{ fontSize: 12.5, lineHeight: 1.6, color: "var(--muted)" }}>
+          Calculado desde las órdenes de compra: una orden cuenta como <b>completa</b> cuando todos sus
+          renglones están en estado <b>“Cumplido”</b>. Es una lectura automática, <b>no reemplaza el
+          dato oficial</b> del formato y no coincide con él por diseño: refleja el estado <b>actual</b>
+          {" "}de la orden (los meses pasados “mejoran” al cerrarse despachos), el denominador incluye
+          órdenes que aún no han llegado (<b>Aprobado</b>, <b>En elaboración</b>) y el mes es el de la
+          <b> fecha de orden</b>, no el de recepción. El desglose por estado está abajo para que nada
+          quede escondido.
+        </div>
+      </div>
+
+      <div className="kpis" style={{ marginBottom: 12 }}>
+        <div className="kpi kc k-ingreso">
+          <div className="klabel">✅ Órdenes completas (proxy)</div>
+          <div className="kval num">{formatNumero(px.completas)}</div>
+          <div className="ksub flag">de {formatNumero(px.totales)} órdenes del período</div>
+        </div>
+        <div className="kpi kc">
+          <div className="klabel">📈 % de cumplimiento (proxy)</div>
+          <div className="kval num">{px.pct != null ? pct1(px.pct) : "—"}</div>
+          <div className="ksub flag">meta &gt; {META_ORDENES} %</div>
+        </div>
+        <div className="kpi kc k-egreso">
+          <div className="klabel">⚠️ Órdenes no completas</div>
+          <div className="kval num">{formatNumero(px.totales - px.completas)}</div>
+          <div className="ksub flag">
+            {px.peor ? `peor mes: ${MES_LARGO[px.peor.mes]} (${pct1(px.peor.pct!)})` : "—"}
+          </div>
+        </div>
+        <div className="kpi kc k-w">
+          <div className="klabel">🧭 Por estado de la orden</div>
+          <div className="kval num" style={{ fontSize: 18 }}>
+            {formatNumero(px.porEstado.parcial)} parciales
+          </div>
+          <div className="ksub flag">
+            {formatNumero(px.porEstado.aprobado)} aprobadas · {formatNumero(px.porEstado.elaboracion)} en elaboración
+          </div>
+        </div>
+      </div>
+
+      <div className="grid two" style={{ marginBottom: 12, alignItems: "stretch" }}>
+        <div className="card">
+          <div className="chart-head">
+            Cumplimiento del período (proxy)
+            <span className="hact">{periodoLabel}</span>
+          </div>
+          <div className="card-body" style={{ display: "grid", placeItems: "center" }}>
+            {px.pct != null ? (
+              <>
+                <Medidor valor={px.pct} color={px.pct >= META_ORDENES ? "var(--ok)" : "var(--bad)"} size={230} />
+                <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 4 }}>
+                  {tag(px.pct, META_ORDENES)}
+                  <span className="flag">
+                    {px.pct >= META_ORDENES
+                      ? `${(px.pct - META_ORDENES).toFixed(1).replace(".", ",")} pp sobre la meta`
+                      : `${(META_ORDENES - px.pct).toFixed(1).replace(".", ",")} pp bajo la meta`}
+                  </span>
+                </div>
+              </>
+            ) : <div className="empty">Sin órdenes en el período.</div>}
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="chart-head">
+            Cumplimiento mensual (proxy)
+            <span className="hact">% de órdenes completas vs. meta {META_ORDENES} %</span>
+          </div>
+          <div className="card-body">
+            {pxHasta > 0 ? (
+              <LineasMensuales
+                categorias={MES_CORTO.slice(1, pxHasta + 1)}
+                unidad="% de cumplimiento"
+                desdeCero={false}
+                formatoY={(v) => `${v.toFixed(0)} %`}
+                formatoPunto={(v) => pct1(v)}
+                series={[
+                  {
+                    label: "% de cumplimiento", color: "var(--az-2)",
+                    data: pxVisibles.map((m) => m.pct),
+                  },
+                  {
+                    label: `Meta ${META_ORDENES} %`, color: "var(--bad)", dash: true,
+                    data: pxVisibles.map((m) => (m.pct == null ? null : META_ORDENES)),
+                  },
+                ]}
+              />
+            ) : <div className="empty">Sin órdenes en el período.</div>}
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div className="chart-head">
+          Detalle mensual (proxy)
+          <span className="hact">estado actual de las órdenes en SIESA · clic para ordenar</span>
+        </div>
+        <div className="tbl-wrap">
+          <table className="tabla-fit">
+            <thead>
+              <tr>
+                <th>Mes</th>
+                <th className="r">Órdenes completas</th>
+                <th className="r">Total de órdenes</th>
+                <th className="r">No completas</th>
+                <th className="r">% de cumplimiento</th>
+                <th>Contra la meta</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {px.meses.filter((m) => m.pct != null).map((m) => (
+                <tr key={m.mes}>
+                  <td style={{ fontWeight: 600 }}>{MES_LARGO[m.mes]}</td>
+                  <td className="r num">{formatNumero(m.completas)}</td>
+                  <td className="r num flag">{formatNumero(m.totales)}</td>
+                  <td className="r num" style={{ color: m.totales - m.completas > 0 ? "var(--w1)" : undefined }}>
+                    {formatNumero(m.totales - m.completas)}
+                  </td>
+                  <td className="r num" style={{ fontWeight: 700, color: m.cumple ? "var(--ok)" : "var(--bad)" }}>
+                    {pct1(m.pct!)}
+                  </td>
+                  <td style={{ minWidth: 150 }} data-orden={m.pct!}>
+                    <div className="rank-bar">
+                      <div style={{ width: `${Math.min(100, m.pct!)}%`, background: m.cumple ? "var(--ok)" : "var(--bad)" }} />
+                    </div>
+                  </td>
+                  <td>{tag(m.pct, META_ORDENES)}</td>
+                </tr>
+              ))}
+              {px.conDato.length === 0 ? (
+                <tr><td colSpan={7}><div className="empty">Sin órdenes en el período.</div></td></tr>
+              ) : (
+                <tr className="fila-total">
+                  <td style={{ fontWeight: 800 }}>Total del período</td>
+                  <td className="r num" style={{ fontWeight: 800 }}>{formatNumero(px.completas)}</td>
+                  <td className="r num" style={{ fontWeight: 800 }}>{formatNumero(px.totales)}</td>
+                  <td className="r num" style={{ fontWeight: 800 }}>{formatNumero(px.totales - px.completas)}</td>
+                  <td className="r num" style={{ fontWeight: 800 }}>{px.pct != null ? pct1(px.pct) : "—"}</td>
+                  <td />
+                  <td>{tag(px.pct, META_ORDENES)}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="card-body" style={{ padding: "8px 14px", fontSize: 12, color: "var(--muted)" }}>
+          “No completas” junta las órdenes <b>parciales</b> (algo llegó, falta el resto) con las que
+          aún no han entrado a recepción (<b>Aprobado</b>, <b>En elaboración</b>). Para el cumplimiento
+          real de entrega, el dato oficial es el del <b>formato</b> de arriba.
         </div>
       </div>
 
