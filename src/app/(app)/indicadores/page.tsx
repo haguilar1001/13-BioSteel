@@ -13,6 +13,7 @@ import { ventaPorLinea } from "@/lib/negocio/ventas";
 import { mesesConPyg } from "@/lib/negocio/pyg";
 import { Medidor } from "../_components/charts/Medidor";
 import { Donut } from "../_components/charts/Donut";
+import { AccionesDescarga } from "../_components/AccionesDescarga";
 
 const ANIO = 2026;
 const MES_ABBR = ["", "ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
@@ -72,9 +73,14 @@ export default async function IndicadoresPage({
     return arr.length ? `/indicadores?meses=${arr.join(",")}` : "/indicadores";
   };
   const periodoLabel = seleccion.map((m) => MES_ABBR[m]).join(" · ");
+  const excelHref = `/indicadores/export${seleccion.length ? `?meses=${seleccion.join(",")}` : ""}`;
 
   return (
     <>
+      <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+        <AccionesDescarga excelHref={excelHref} />
+      </div>
+
       {/* Resumen y Período lado a lado para ganar espacio vertical. El título
           del módulo lo pone el layout, que es el que lleva las pestañas. */}
       <div style={{ display: "flex", gap: 12, alignItems: "stretch", flexWrap: "wrap", marginBottom: 12 }}>

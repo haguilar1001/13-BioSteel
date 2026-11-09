@@ -19,6 +19,7 @@ import { formatNumero, formatPorcentaje } from "@/lib/format";
 import { Medidor } from "../../_components/charts/Medidor";
 import { LineasMensuales } from "../../_components/charts/LineasMensuales";
 import { Buscador } from "../../_components/Buscador";
+import { AccionesDescarga } from "../../_components/AccionesDescarga";
 import {
   resumenIndicador, resumenEvaluacion, aniosConIndicador, mesesConEvaluacion,
   resumenProxyEstado,
@@ -113,9 +114,14 @@ export default async function IndicadoresComprasPage({
     ? ev.filas.filter((f) => normaliza(f.proveedor).includes(normaliza(q)))
     : ev.filas;
   const qsBase = { anio: String(anio), ...(seleccion.length ? { meses: seleccion.join(",") } : {}) };
+  const excelHref = `/indicadores/compras/export?${new URLSearchParams(qsBase).toString()}`;
 
   return (
     <>
+      <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+        <AccionesDescarga excelHref={excelHref} />
+      </div>
+
       {/* Ficha del formato: qué mide, cómo y contra qué meta. */}
       <div className="card" style={{ marginBottom: 12 }}>
         <div className="chart-head">

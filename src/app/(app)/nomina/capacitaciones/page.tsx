@@ -21,6 +21,7 @@ import {
   porColaborador, distribucion, ejecucion, nivelDe, nivelMejora, detalleCapacitaciones,
   META_EJECUCION, META_EFICACIA, MES_CORTO, MES_LARGO,
 } from "@/lib/negocio/capacitaciones";
+import { AccionesDescarga } from "../../_components/AccionesDescarga";
 
 /** 82,4 % — un decimal y coma decimal, como el resto de la app. */
 const pct = (v: number) => `${v.toFixed(1).replace(".", ",")} %`;
@@ -75,8 +76,16 @@ export default async function CapacitacionesPage({ searchParams }: { searchParam
     ? ` · ${MES_LARGO[primero]}–${MES_LARGO[ultimo]}`
     : "";
 
+  const excelHref = `/nomina/capacitaciones/export?${new URLSearchParams({
+    anio: String(anio), ...(mes ? { mes: String(mes) } : {}),
+  }).toString()}`;
+
   return (
     <>
+      <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+        <AccionesDescarga excelHref={excelHref} />
+      </div>
+
       <div className="card" style={{ marginBottom: 12 }}>
         <div className="card-body" style={{ paddingBottom: 12 }}>
           <div style={{ marginBottom: 10 }}>

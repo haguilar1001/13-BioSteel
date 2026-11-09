@@ -10,6 +10,7 @@ import { formatNumero } from "@/lib/format";
 import { FiltroAuto } from "../_components/FiltroAuto";
 import { MultiSelect, type OpcionMulti } from "../_components/MultiSelect";
 import { listaDe } from "../_components/filtro-multi";
+import { AccionesDescarga } from "../_components/AccionesDescarga";
 import { LineasMensuales } from "../_components/charts/LineasMensuales";
 import {
   aniosConEvaluaciones, mesesConEvaluaciones, evaluaciones, pqrs,
@@ -81,9 +82,18 @@ export default async function AsistenciaPage({
   const opMeses: OpcionMulti[] = mesesDisp.map((m) => ({ value: String(m), label: MES_LARGO[m]! }));
   const opAsesores: OpcionMulti[] = asesoresDisp.map((a) => ({ value: a, label: a }));
   const asesorTxt = asesor.length ? ` · ${asesor.join(", ")}` : "";
+  const excelHref = `/asistencia/export?${new URLSearchParams({
+    anio: String(anio),
+    ...(mes.length ? { mes: mes.join(",") } : {}),
+    ...(asesor.length ? { asesor: asesor.join(",") } : {}),
+  }).toString()}`;
 
   return (
     <>
+      <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+        <AccionesDescarga excelHref={excelHref} />
+      </div>
+
       <div className="card" style={{ marginBottom: 12 }}>
         <div className="card-body" style={{ paddingBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
           <div>

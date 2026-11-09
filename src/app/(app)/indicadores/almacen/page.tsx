@@ -12,6 +12,7 @@ import { claseOpcion } from "@/lib/negocio/recepcion";
 import {
   resumenAceptacion, aniosConRecepciones, META, MES_CORTO, MES_LARGO,
 } from "@/lib/negocio/indicador-almacen";
+import { AccionesDescarga } from "../../_components/AccionesDescarga";
 
 const MES_ABBR = ["", "ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
 const pct1 = (v: number) => `${v.toFixed(1).replace(".", ",")} %`;
@@ -71,9 +72,16 @@ export default async function IndicadoresAlmacenPage({
 
   const hastaMes = base.conDato.length ? Math.max(...base.conDato) : 0;
   const visibles = base.meses.slice(0, hastaMes);
+  const excelHref = `/indicadores/almacen/export?${new URLSearchParams({
+    anio: String(anio), ...(seleccion.length ? { meses: seleccion.join(",") } : {}),
+  }).toString()}`;
 
   return (
     <>
+      <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+        <AccionesDescarga excelHref={excelHref} />
+      </div>
+
       <div className="card" style={{ marginBottom: 12 }}>
         <div className="chart-head">
           Indicadores de Almacén · {periodoLabel}
