@@ -124,6 +124,65 @@ export default async function DescuentosPage({
           <b> % descuento</b> con tu Power BI: si en un cliente sale más bajo aquí, es que a esa venta no se le calculó la nota crédito.
         </div>
       </div>
+
+      {r.detalleSinCliente && (
+        <div className="card" style={{ marginTop: 12 }}>
+          <div className="chart-head">
+            ¿Qué es la fila “(sin cliente)”?
+            <span className="hact">
+              {r.detalleSinCliente.renglones.toLocaleString("es-CO")} renglón(es) sin “Razón social cliente despacho” · {periodo}
+            </span>
+          </div>
+          <div className="card-body" style={{ fontSize: 12.5, lineHeight: 1.6 }}>
+            Son documentos cuya columna <b>Razón social cliente despacho</b> llega <b>vacía</b>, así que no se les asigna IPS
+            ni se les calcula nota crédito (por eso 0 %). Aquí los tienes abiertos por tipo, sucursal y por <b>Cliente factura
+            (NIT)</b> — el NIT suele decir de quién es la venta — y el listado de documentos para rastrearlos en SIESA.
+          </div>
+          <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12, padding: "0 14px 12px" }}>
+            {([
+              ["Por tipo de documento", r.detalleSinCliente.porTipo],
+              ["Por sucursal", r.detalleSinCliente.porSucursal],
+              ["Por Cliente factura (NIT)", r.detalleSinCliente.porNit],
+            ] as const).map(([titulo, grupos]) => (
+              <div key={titulo} className="tbl-wrap">
+                <div className="subhead" style={{ margin: "0 0 4px" }}>{titulo}</div>
+                <table className="tabla-fit">
+                  <thead><tr><th>{titulo.includes("NIT") ? "NIT" : titulo.includes("sucursal") ? "Sucursal" : "Tipo"}</th><th className="r">Docs</th><th className="r">Subtotal</th></tr></thead>
+                  <tbody>
+                    {grupos.slice(0, 12).map((g) => (
+                      <tr key={g.clave}>
+                        <td style={{ fontWeight: 600 }} title={g.clave}>{g.clave}</td>
+                        <td className="r num flag">{g.n.toLocaleString("es-CO")}</td>
+                        <td className="r num"><Monto value={g.subtotal} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+          </div>
+          <div className="tbl-wrap">
+            <div className="subhead" style={{ margin: "0 14px 4px" }}>Documentos (mayores primero)</div>
+            <table className="tabla-fit">
+              <thead>
+                <tr><th>Nro documento</th><th>Tipo</th><th className="r">Día</th><th>Sucursal</th><th>NIT (Cliente factura)</th><th className="r">Subtotal</th></tr>
+              </thead>
+              <tbody>
+                {r.detalleSinCliente.docs.map((d) => (
+                  <tr key={d.nro}>
+                    <td style={{ fontWeight: 600 }}>{d.nro}</td>
+                    <td className="flag">{d.tipo}</td>
+                    <td className="r num">{d.dia}</td>
+                    <td title={d.suc}>{d.suc || "—"}</td>
+                    <td title={d.nit ?? ""}>{d.nit || "—"}</td>
+                    <td className="r num"><Monto value={d.subtotal} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </>
   );
 }

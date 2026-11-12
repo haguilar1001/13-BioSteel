@@ -29,6 +29,21 @@ export interface FilaDescuento {
   pct: number;
 }
 
+export interface GrupoSinCliente { clave: string; n: number; subtotal: number }
+export interface DocSinCliente { nro: string; dia: number; tipo: string; suc: string; nit: string; subtotal: number }
+
+/** Desglose de los renglones cuya "Razón social cliente despacho" llega vacía. */
+export interface DetalleSinCliente {
+  subtotal: number;
+  renglones: number;
+  porTipo: GrupoSinCliente[];
+  porSucursal: GrupoSinCliente[];
+  /** Por "Cliente factura" (NIT): suele revelar de quién es la venta. */
+  porNit: GrupoSinCliente[];
+  /** Documentos de mayor valor (hasta 60), para rastrear en SIESA. */
+  docs: DocSinCliente[];
+}
+
 export interface ResumenDescuentos {
   filas: FilaDescuento[];
   subtotal: number;
@@ -38,9 +53,11 @@ export interface ResumenDescuentos {
   /** Renglones leídos y cuántos traen vacías las columnas que el motor usa. */
   renglones: number;
   sinColumnasNC: number;
+  /** Detalle de la fila "(sin cliente)"; null si no hay. */
+  detalleSinCliente: DetalleSinCliente | null;
 }
 
-type DocRow = VentaRow & { cliente: string };
+type DocRow = VentaRow & { cliente: string; nit: string; dia: number };
 
 /** Descuentos financieros por cliente del período (año, opcionalmente meses). */
 export async function descuentosPorCliente(anio: number, meses?: number[]): Promise<ResumenDescuentos> {
@@ -50,9 +67,9 @@ export async function descuentosPorCliente(anio: number, meses?: number[]): Prom
     prisma.ventaDoc.findMany({
       where: { anio },
       select: {
-        nro: true, tipo: true, aprobada: true, fecha: true, anio: true, mes: true,
+        nro: true, tipo: true, aprobada: true, fecha: true, anio: true, mes: true, dia: true,
         ips: true, suc: true, bod: true, notas: true, conv: true, proc: true, linea: true,
-        subtotal: true, fbd: true, cliente: true,
+        subtotal: true, fbd: true, cliente: true, nit: true,
       },
     }),
   ]);
@@ -66,13 +83,15 @@ export async function descuentosPorCliente(anio: number, meses?: number[]): Prom
   const rows: DocRow[] = docs.map((d) => ({
     nro: d.nro, tipo: d.tipo, aprobada: d.aprobada, ms: d.fecha.getTime(), anio: d.anio, mes: d.mes,
     ips: d.ips, suc: d.suc, bod: d.bod, notas: d.notas, conv: d.conv, proc: d.proc, linea: d.linea,
-    subtotal: d.subtotal.toNumber(), fbd: d.fbd ?? undefined, cliente: d.cliente || "(sin cliente)",
+    subtotal: d.subtotal.toNumber(), fbd: d.fbd ?? undefined,
+    cliente: d.cliente || "(sin cliente)", nit: d.nit ?? "", dia: d.dia,
   }));
   // NAN de todo el año: el gate de "NAN de otro mes" necesita el año completo.
   const ctx: CtxNC = { params, nanMeses: construirNanMeses(rows, (i) => rows[i]!.fbd ?? ""), excluidos };
 
   const acota = meses && meses.length ? new Set(meses) : null;
   const porCliente = new Map<string, { sub: number; nc: number }>();
+  const sinCli: DocRow[] = [];
   let subtotal = 0, nc = 0, renglones = 0, sinColumnasNC = 0;
 
   for (const r of rows) {
@@ -82,6 +101,7 @@ export async function descuentosPorCliente(anio: number, meses?: number[]): Prom
     // Un FET elegible a descuento pero sin ninguna de las columnas de matching
     // es señal de archivo incompleto: se cuenta para avisarlo en pantalla.
     if (r.tipo === "FET" && !r.suc && !r.conv && !r.proc && !r.linea) sinColumnasNC++;
+    if (r.cliente === "(sin cliente)") sinCli.push(r);
     const e = porCliente.get(r.cliente) ?? { sub: 0, nc: 0 };
     e.sub += r.subtotal; e.nc += descuento;
     porCliente.set(r.cliente, e);
@@ -99,5 +119,34 @@ export async function descuentosPorCliente(anio: number, meses?: number[]): Prom
     filas, subtotal, notaCredito: nc, neto: subtotal - nc,
     pct: subtotal ? (nc / subtotal) * 100 : 0,
     renglones, sinColumnasNC,
+    detalleSinCliente: detallarSinCliente(sinCli),
+  };
+}
+
+/** Agrupa un valor de texto y acumula n y subtotal, ordenado desc. */
+function agrupar(rows: DocRow[], clave: (r: DocRow) => string): GrupoSinCliente[] {
+  const m = new Map<string, { n: number; subtotal: number }>();
+  for (const r of rows) {
+    const k = clave(r) || "(vacío)";
+    const e = m.get(k) ?? { n: 0, subtotal: 0 };
+    e.n += 1; e.subtotal += r.subtotal; m.set(k, e);
+  }
+  return [...m.entries()].map(([clave, e]) => ({ clave, n: e.n, subtotal: e.subtotal }))
+    .sort((a, b) => b.subtotal - a.subtotal);
+}
+
+function detallarSinCliente(rows: DocRow[]): DetalleSinCliente | null {
+  if (!rows.length) return null;
+  const docs = [...rows]
+    .sort((a, b) => b.subtotal - a.subtotal)
+    .slice(0, 60)
+    .map((r) => ({ nro: r.nro, dia: r.dia, tipo: r.tipo, suc: r.suc, nit: r.nit, subtotal: r.subtotal }));
+  return {
+    subtotal: rows.reduce((s, r) => s + r.subtotal, 0),
+    renglones: rows.length,
+    porTipo: agrupar(rows, (r) => r.tipo),
+    porSucursal: agrupar(rows, (r) => r.suc),
+    porNit: agrupar(rows, (r) => r.nit),
+    docs,
   };
 }
