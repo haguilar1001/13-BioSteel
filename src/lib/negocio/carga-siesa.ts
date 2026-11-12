@@ -106,7 +106,18 @@ export async function procesarCarga(archivos: ArchivoEntrada[], origenIp?: strin
   for (const a of archivos) {
     try {
       if (a.clave === "ventas") {
-        const { filas, sinFecha, hoja } = leerRenglones(a.buffer);
+        const { filas, sinFecha, hoja, columnasNCfaltan } = leerRenglones(a.buffer);
+        // Puerta de las columnas de NC: sin ellas la nota crédito sale 0 y el
+        // neto se infla. Se pregunta antes de escribir porque la carga no falla
+        // sola — el reporte "por ítem" de SIESA no trae estas columnas.
+        if (!confirmado && columnasNCfaltan.length) {
+          throw new CargaRequiereConfirmacion(
+            `El archivo de ventas NO trae ${columnasNCfaltan.length} columna(s) que el motor de notas crédito necesita: ` +
+            `${columnasNCfaltan.join(", ")}. Sin ellas, el descuento financiero (nota crédito) de esos renglones se calcula ` +
+            "como CERO y la venta neta sale inflada. Vuelve a exportar de SIESA el informe de ventas COMPLETO (con esas " +
+            "columnas) antes de cargarlo. Si aun así quieres continuar, confirma la carga.",
+          );
+        }
         // Puerta de la columna Cantidad ×100: se pregunta antes de escribir,
         // porque una vez guardada la cifra mala nadie la vuelve a mirar.
         const sospecha = confirmado ? null : cantidadesSospechosas(filas);

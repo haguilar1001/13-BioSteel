@@ -118,6 +118,9 @@ export interface RenglonesLeidos {
   filas: FilaVenta[];
   sinFecha: number;
   hoja: string;
+  /** Columnas que el motor de notas crédito necesita y el archivo NO trae.
+   *  Si llega con algo, la NC de esos renglones no se calcula y el neto se infla. */
+  columnasNCfaltan: string[];
 }
 
 /** Lee el workbook (primera hoja) y devuelve los renglones normalizados. */
@@ -153,6 +156,14 @@ export function leerRenglones(buffer: Buffer | ArrayBuffer): RenglonesLeidos {
   if (C.doc < 0 || C.fecha < 0 || C.sub < 0) {
     throw new Error("No parece un reporte SIESA de ventas: faltan columnas 'Nro documento' / 'Fecha' / 'Valor subtotal local'.");
   }
+  // Columnas que el motor de NC necesita para calcular el descuento. Si el
+  // archivo no las trae, la carga igual funciona pero la nota crédito sale 0
+  // en esos renglones: se reporta para avisar antes de escribir.
+  const columnasNCfaltan = ([
+    ["Estado", C.est], ["Desc. sucursal factura", C.suc], ["Convenio", C.conv],
+    ["Procedimiento", C.proc], ["LÍNEA", C.linea], ["Desc. bodega", C.bod],
+    ["Factura base devolución", C.fbd],
+  ] as [string, number][]).filter(([, i]) => i < 0).map(([n]) => n);
   const up = (v: unknown) => (v == null ? "" : String(v).toUpperCase());
   const filas: FilaVenta[] = [];
   let sinFecha = 0;
@@ -183,7 +194,7 @@ export function leerRenglones(buffer: Buffer | ArrayBuffer): RenglonesLeidos {
       lista: ixLista >= 0 ? String(r[ixLista] ?? "").trim() : "",
     });
   }
-  return { filas, sinFecha, hoja: nombreHoja };
+  return { filas, sinFecha, hoja: nombreHoja, columnasNCfaltan };
 }
 
 export interface FilaLineaAgg { anio: number; mes: number; linea: string; valor: number; costo: number }
