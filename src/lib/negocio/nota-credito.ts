@@ -61,6 +61,21 @@ export function nroClave(s: string): string {
   return s.replace(/\D/g, "").replace(/^0+/, "") || "0";
 }
 
+/**
+ * Tipos de documento que SON venta: lo que trae la consulta "FACTURAS POR
+ * ITEM" de SIESA y el Power BI — factura electrónica (FET) y nota crédito
+ * (NAN). Cualquier otro prefijo (pedidos PED, cotizaciones, etc.) NO es venta:
+ * si quedó en VentaDoc de una carga vieja, no debe sumar al neto ni aparecer
+ * como cliente — por eso salían como la fila "(sin cliente)", que PBI nunca
+ * trae porque su consulta es de facturas.
+ */
+export const TIPOS_VENTA: ReadonlySet<string> = new Set(["FET", "NAN"]);
+
+/** ¿El renglón es un documento de venta (factura o nota crédito)? */
+export function esDocumentoVenta(tipo: string): boolean {
+  return TIPOS_VENTA.has(tipo);
+}
+
 /** ¿`hay` (MAYÚSCULAS) contiene el literal `needle` (MAYÚSCULAS)? */
 function ct(hay: string, needle: string): boolean {
   return hay.includes(needle);

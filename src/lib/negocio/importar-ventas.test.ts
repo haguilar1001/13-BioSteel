@@ -78,7 +78,7 @@ describe("normalizaBodega", () => {
 // reconstruye VentaItemIps entero cada vez).
 describe("agregarVentas — normaliza la lista de precios (código → nombre)", () => {
   const fila = (over: Partial<FilaVenta>): FilaVenta => ({
-    nro: "FET-1", tipo: "OTRO", aprobada: true, ms: Date.UTC(2026, 0, 15),
+    nro: "FET-1", tipo: "FET", aprobada: true, ms: Date.UTC(2026, 0, 15),
     anio: 2026, mes: 1, ips: "CLINICA X", suc: "", bod: "", notas: "TORNILLO", conv: "", proc: "", linea: "",
     subtotal: 100, costo: 60, cliente: "CLINICA X", nit: "900", marca: "1003 - SAMPEDRO",
     referencia: "REF1", cantidad: 1, lista: "",

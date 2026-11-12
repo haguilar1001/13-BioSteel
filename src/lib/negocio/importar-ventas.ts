@@ -7,7 +7,7 @@
 // el script de carga (prisma/set-ventas.ts) y el importador in-app.
 // ==========================================================
 import * as XLSX from "xlsx";
-import { ipsDe, notaCredito, type VentaRow, type ParamNC, type CtxNC } from "./nota-credito";
+import { ipsDe, notaCredito, esDocumentoVenta, type VentaRow, type ParamNC, type CtxNC } from "./nota-credito";
 import { nombreLista } from "./listas-precio";
 
 /** Renglón normalizado: lo del motor + campos para agregar (costo/cliente/nit). */
@@ -240,8 +240,10 @@ function construirNanMeses(filas: FilaVenta[]): Map<string, Set<string>> {
 
 /**
  * Corre el motor de NC y pre-agrega la venta NETA por línea×mes y cliente×mes.
- * `venta neta = Σ(Valor subtotal local) − Σ(NOTA_CREDITO)` (todos los renglones;
- * NC sólo en FET). Aplica los parámetros y las exclusiones dados.
+ * `venta neta = Σ(Valor subtotal local) − Σ(NOTA_CREDITO)` (NC sólo en FET).
+ * Solo cuentan los documentos de VENTA (FET + NAN, ver esDocumentoVenta): un
+ * pedido u otro prefijo que haya quedado en VentaDoc de una carga vieja se
+ * ignora, igual que en el Power BI (su consulta es de facturas).
  */
 export function agregarVentas(
   filas: FilaVenta[], params: ParamNC[], excluidos: Set<string>,
@@ -260,6 +262,7 @@ export function agregarVentas(
   let totalNC = 0;
 
   for (const r of filas) {
+    if (!esDocumentoVenta(r.tipo)) continue; // pedidos y demás no-venta: fuera
     const nc = notaCredito(r, ctx);
     totalNC += nc;
     const neto = r.subtotal - nc;

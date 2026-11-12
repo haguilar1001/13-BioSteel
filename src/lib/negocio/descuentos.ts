@@ -16,7 +16,7 @@
 import "server-only";
 import { prisma } from "@/lib/db";
 import {
-  notaCredito, construirNanMeses, nroClave,
+  notaCredito, construirNanMeses, nroClave, esDocumentoVenta,
   type CtxNC, type ParamNC, type VentaRow,
 } from "./nota-credito";
 
@@ -96,6 +96,7 @@ export async function descuentosPorCliente(anio: number, meses?: number[]): Prom
 
   for (const r of rows) {
     if (acota && !acota.has(r.mes)) continue;
+    if (!esDocumentoVenta(r.tipo)) continue; // solo facturas (FET) y notas crédito (NAN), como PBI
     renglones++;
     const descuento = notaCredito(r, ctx);
     // Un FET elegible a descuento pero sin ninguna de las columnas de matching

@@ -15,6 +15,7 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import { DATASETS, parseDataset, type DatasetKey } from "./importar-siesa-pendientes";
 import { leerRenglones, cantidadesSospechosas, type FilaVenta } from "./importar-ventas";
+import { TIPOS_VENTA } from "./nota-credito";
 import { CargaRequiereConfirmacion, esConfirmacionPendiente } from "./carga-confirmacion";
 import { escribirAgregados, docABitVenta } from "./escribir-ventas";
 
@@ -77,6 +78,11 @@ async function persistir(clave: DatasetKey, rows: Record<string, unknown>[]): Pr
 async function persistirVentas(filas: FilaVenta[]): Promise<Persistencia> {
   const fechas = [...new Map(filas.map((f) => [f.ms, new Date(f.ms)])).values()];
   if (fechas.length) await prisma.ventaDoc.deleteMany({ where: { fecha: { in: fechas } } });
+  // Purga renglones que NO son venta (pedidos y demás) de cargas viejas: la
+  // consulta de ventas es solo facturas (FET) y notas crédito (NAN). El borrado
+  // por fecha de arriba no los alcanza —tienen sus propias fechas— y, si se
+  // quedan, inflan el neto y salen como la fila "(sin cliente)".
+  const purga = await prisma.ventaDoc.deleteMany({ where: { tipo: { notIn: [...TIPOS_VENTA] } } });
   const docs = filas.map((f) => ({
     nro: f.nro, tipo: f.tipo, aprobada: f.aprobada, fecha: new Date(f.ms), anio: f.anio, mes: f.mes, dia: new Date(f.ms).getUTCDate(),
     ips: f.ips, suc: f.suc, bod: f.bod, notas: f.notas, conv: f.conv, proc: f.proc, linea: f.linea,
@@ -89,7 +95,8 @@ async function persistirVentas(filas: FilaVenta[]): Promise<Persistencia> {
   const avisoBodegas = res.bodegasSinInstalacion.length
     ? ` · ⚠️ ${res.bodegasSinInstalacion.length} bodega(s) sin instalación (falta en Tablas Auxiliares): ${res.bodegasSinInstalacion.join(", ")}`
     : "";
-  return { cargadas: filas.length, estrategia: `${fechas.length} fecha(s) nueva(s)/actualizada(s); venta neta recalculada sobre ${todos.length} renglones${avisoBodegas}` };
+  const avisoPurga = purga.count ? ` · 🧹 ${purga.count} renglón(es) no-venta (pedidos, etc.) eliminados de cargas viejas` : "";
+  return { cargadas: filas.length, estrategia: `${fechas.length} fecha(s) nueva(s)/actualizada(s); venta neta recalculada sobre ${todos.length} renglones${avisoPurga}${avisoBodegas}` };
 }
 
 export interface ArchivoEntrada { clave: DatasetKey; nombre: string; buffer: Buffer; }
